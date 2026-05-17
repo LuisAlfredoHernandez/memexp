@@ -35,5 +35,12 @@ class Insumo(InsumoBase):
         from_attributes = True
 
 
-class InsumoUpdate(InsumoBase):
-    pass
+class InsumoUpdate(BaseModel):
+    nombre: str | None = Field(default=None, min_length=1)
+    codigo: str | None = None
+    tipo: TipoInsumo | None = None
+    unidad: UnidadMedida | None = None
+    stock: float | None = Field(default=None, ge=0)
+    minimo: float | None = Field(default=None, ge=0)
+    proveedor: str | None = None
+    vinculado_a: list[str] | None = None

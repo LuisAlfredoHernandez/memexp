@@ -25,5 +25,12 @@ class Maquina(MaquinaBase):
 class MaquinaCreate(MaquinaBase):
     pass
 
-class MaquinaUpdate(MaquinaBase):
-    pass
+class MaquinaUpdate(BaseModel):
+    codigo: str | None = Field(default=None, min_length=1)
+    tipo: MaquinaTipo | None = None
+    nombre: str | None = Field(default=None, min_length=2)
+    descripcion: str | None = None
+    modelo: str | None = None
+    capacidad_por_hora: float | None = Field(default=None, ge=0)
+    estado: MaquinaEstado | None = None
+    operario_asignado: str | None = None
