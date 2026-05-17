@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from enum import str, Enum
+from enum import Enum
 from .usuario import Usuario, UsuarioBase, UsuarioCreate, UsuarioUpdate, Rol
 
 class MaquinaTipo(str, Enum):

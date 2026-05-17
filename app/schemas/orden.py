@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from enum import str, Enum
+from enum import Enum
 
 class EstadoOrden(str, Enum):
     PENDIENTE = "pendiente"
