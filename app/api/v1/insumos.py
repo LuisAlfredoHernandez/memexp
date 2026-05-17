@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from app.schemas.insumo import Insumo, InsumoCreate
+from app.schemas.insumo import Insumo, InsumoCreate, InsumoUpdate
 
 router = APIRouter(prefix="/insumos", tags=["Inventario - Insumos"])
 
@@ -16,7 +16,7 @@ async def crear_insumo(insumo: InsumoCreate):
     return {**insumo.model_dump(), "id": "new-uuid"}
 
 @router.patch("/{id}", response_model=Insumo)
-async def actualizar_insumo(id: str, insumo: InsumoCreate):
+async def actualizar_insumo(id: str, insumo: InsumoUpdate):
     return {**insumo.model_dump(), "id": id}
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

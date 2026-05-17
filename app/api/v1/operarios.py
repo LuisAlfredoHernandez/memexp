@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from app.schemas.operario import Operario, OperarioCreate
+from app.schemas.operario import Operario, OperarioCreate, OperarioUpdate
 
 router = APIRouter(prefix="/operarios", tags=["RRHH - Operarios"])
 
@@ -16,7 +16,7 @@ async def obtener_operario(id: str):
     return {"id": id, "nombre": "Juan"}
 
 @router.patch("/{id}", response_model=Operario)
-async def actualizar_operario(id: str, operario: OperarioCreate):
+async def actualizar_operario(id: str, operario: OperarioUpdate):
     return {**operario.model_dump(), "id": id}
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

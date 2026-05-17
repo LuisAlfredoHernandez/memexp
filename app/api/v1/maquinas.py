@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from app.schemas.maquina import Maquina
+from app.schemas.maquina import Maquina, MaquinaCreate, MaquinaUpdate
 
 router = APIRouter(prefix="/maquinas", tags=["Planta - Maquinaria"])
 
@@ -8,11 +8,11 @@ async def listar_maquinas():
     return []
 
 @router.post("/", response_model=Maquina, status_code=status.HTTP_201_CREATED)
-async def crear_maquina(maquina: Maquina):
+async def crear_maquina(maquina: MaquinaCreate):
     return {**maquina.model_dump(), "id": "mq-uuid"}
 
 @router.patch("/{id}", response_model=Maquina)
-async def actualizar_maquina(id: str, maquina: Maquina):
+async def actualizar_maquina(id: str, maquina: MaquinaUpdate):
     return {**maquina.model_dump(), "id": id}
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
