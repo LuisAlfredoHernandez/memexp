@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from enum import str, Enum
+from enum import Enum
 
 class TipoInsumo(str, Enum):
     TELA = "tela"
