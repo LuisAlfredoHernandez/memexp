@@ -1,3 +1,4 @@
+from enum import Enum
 from pydantic import BaseModel, Field
 from .operario import MaquinaTipo # Reutilizamos el Enum de tipos
 

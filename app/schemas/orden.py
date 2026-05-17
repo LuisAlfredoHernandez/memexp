@@ -56,5 +56,14 @@ class Orden(OrdenBase):
 class OrdenCreate(OrdenBase):
     pass
 
-class OrdenUpdate(OrdenBase):
-    pass    
+class OrdenUpdate(BaseModel):
+    numero: str | None = Field(default=None, min_length=1)
+    cliente: str | None = Field(default=None, min_length=2)
+    tipo: TipoOP | None = None
+    estado: EstadoOrden | None = None
+    prioridad: str | None = None
+    temporada: Temporada | None = None
+    fecha_entrega_estimada: datetime | None = None
+    notas: str | None = None
+    cola: int | None = Field(default=None, ge=0)
+    lineas: list[LineaOrden] | None = Field(default=None, min_length=1)

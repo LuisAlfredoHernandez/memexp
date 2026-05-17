@@ -1,7 +1,10 @@
-from app.db.insumo_model import Insumo
-from app.db.linea_orden_model import LineaOrden
 from sqlmodel import Field, SQLModel, Relationship
 import uuid
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .insumo_model import Insumo
+    from .linea_orden_model import LineaOrden
 
 class LineaOrdenInsumoLink(SQLModel, table=True):
     __tablename__ = "linea_orden_insumo_link"
