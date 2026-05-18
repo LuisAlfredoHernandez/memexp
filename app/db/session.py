@@ -7,8 +7,9 @@ engine = create_engine(settings.DATABASE_URL, echo=settings.ECHO_SQL)
 def create_db_and_tables():
     """
     Inicializa la base de datos y crea todas las tablas definidas en los modelos.
-    SQLModel necesita que los modelos sean importados en algún punto para conocerlos.
-    El __init__.py de la carpeta db ya se encarga de esto.
+    NOTA: Esta función es útil para desarrollo y pruebas. En un entorno de producción,
+    la gestión de la base de datos debería realizarse a través de un sistema de migraciones
+    como Alembic para manejar los cambios de esquema de forma controlada.
     """
     SQLModel.metadata.create_all(engine)
 

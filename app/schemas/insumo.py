@@ -55,7 +55,7 @@ class InsumoCreate(InsumoBase):
 
 class Insumo(InsumoBase):
     id: uuid.UUID
-    vinculado_a: list[InsumoEnOrden] = Field(default=[])
+    vinculado_a: list[InsumoEnOrden] = Field(default_factory=list)
 
     class ConfigDict:
         from_attributes = True
