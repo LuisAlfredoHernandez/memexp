@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status, Depends, HTTPException
 from sqlmodel import Session, select
-from app.schemas.usuario import Usuario as UsuarioSchema, UsuarioCreate, UsuarioUpdate
+from app.schemas.usuario import Usuario as UsuarioSchema, UsuarioCreate, UsuarioUpdate, UsuarioEstado
 from app.db.usuario_model import Usuario
 from app.db.session import get_session
 from app.core.security import hash_password
@@ -58,6 +58,7 @@ def eliminar_usuario(id: uuid.UUID, db: Session = Depends(get_session)):
     db_usuario = db.get(Usuario, id)
     if not db_usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    db.delete(db_usuario)
+    db_usuario.estado = UsuarioEstado.INACTIVO
+    db.add(db_usuario)
     db.commit()
     return

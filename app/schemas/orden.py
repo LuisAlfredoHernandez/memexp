@@ -10,6 +10,7 @@ class EstadoOrden(str, Enum):
     EN_PROCESO = "en_proceso"
     COMPLETADA = "completada"
     CANCELADA = "cancelada"
+    PAUSADA = "pausada"
 
 class InsumoRequerido(BaseModel):
     insumo_id: uuid.UUID
@@ -21,10 +22,10 @@ class TipoOP(str, Enum):
     MTS="MTS"
 
 class Temporada(str, Enum):
-    PRIMAVERA = "P"
-    VERANO = "V"
-    OTONO= "O"
-    INVIERNO = "I"
+    PRIMAVERA = "Primavera"
+    VERANO = "Verano"
+    OTONO= "Otono"
+    INVIERNO = "Invierno"
     PERMANENTE = "permanente"
 
 class LineaOrden(BaseModel):

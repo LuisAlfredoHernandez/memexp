@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, Depends, HTTPException
 from sqlmodel import Session, select
 from app.schemas.operario import Operario as OperarioSchema, OperarioCreate, OperarioUpdate
-from app.schemas.usuario import UsuarioCreate
+from app.schemas.usuario import UsuarioCreate, UsuarioUpdate
 from app.db.operario_model import Operario
 from app.db.usuario_model import Usuario
 from app.db.session import get_session
@@ -80,7 +80,6 @@ def actualizar_operario(id: uuid.UUID, operario: OperarioUpdate, db: Session = D
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_operario(id: uuid.UUID, db: Session = Depends(get_session)):
-    # Al eliminar un operario, también eliminamos el usuario asociado.
     db_operario = db.get(Operario, id)
     if not db_operario:
         raise HTTPException(status_code=404, detail="Operario no encontrado")

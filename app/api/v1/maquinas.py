@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlmodel import Session, select
-from app.schemas.maquina import Maquina as MaquinaSchema, MaquinaCreate, MaquinaUpdate
+from app.schemas.maquina import Maquina as MaquinaSchema, MaquinaCreate, MaquinaUpdate, MaquinaEstado
 from app.db.maquina_model import Maquina
 from app.db.session import get_session
 import uuid
@@ -47,6 +47,7 @@ def eliminar_maquina(id: uuid.UUID, db: Session = Depends(get_session)):
     db_maquina = db.get(Maquina, id)
     if not db_maquina:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Máquina no encontrada")
-    db.delete(db_maquina)
+    db_maquina.estado = MaquinaEstado.FUERA_SERVICIO
+    db.add(db_maquina)
     db.commit()
     return
