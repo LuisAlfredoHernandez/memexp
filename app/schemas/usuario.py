@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel, EmailStr, Field
-
+import uuid
 
 class Rol(str, Enum):
     Operario = "operario"
@@ -20,9 +20,10 @@ class UsuarioBase(BaseModel):
 
 class UsuarioCreate(UsuarioBase):
     password: str = Field(..., min_length=8)
-
+    estado: UsuarioEstado = UsuarioEstado.INACTIVO
+    
 class Usuario(UsuarioBase):
-    id: str
+    id: uuid.UUID
 
     class ConfigDict:
         from_attributes = True

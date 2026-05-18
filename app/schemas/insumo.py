@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from enum import Enum
+import uuid
 
 class TipoInsumo(str, Enum):
     TELA = "tela"
@@ -29,7 +30,7 @@ class InsumoCreate(InsumoBase):
     pass
 
 class Insumo(InsumoBase):
-    id: str
+    id: uuid.UUID
 
     class ConfigDict:
         from_attributes = True

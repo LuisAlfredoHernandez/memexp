@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
+import uuid
 
 class EstadoOrden(str, Enum):
     PENDIENTE = "pendiente"
@@ -9,7 +10,7 @@ class EstadoOrden(str, Enum):
     CANCELADA = "cancelada"
 
 class InsumoRequerido(BaseModel):
-    insumo_id: str
+    insumo_id: uuid.UUID
     cantidad_requerida: float
     unidad: str
 
@@ -46,9 +47,9 @@ class OrdenBase(BaseModel):
     lineas: list[LineaOrden] = Field(..., min_length=1)
 
 class Orden(OrdenBase):
-    id: str | None = None
+    id: uuid.UUID
     fecha_creacion: datetime = Field(default_factory=datetime.now)
-    creada_por: str | None = None
+    creada_por_id: uuid.UUID | None = None
 
     class ConfigDict:
         from_attributes = True
