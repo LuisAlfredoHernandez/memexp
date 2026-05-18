@@ -24,7 +24,9 @@ class OperarioCreate(OperarioBase):
 
 class Operario(OperarioBase):
     id: uuid.UUID
-    pass
+    
+    class ConfigDict:
+        from_attributes = True
 
 class OperarioUpdate(UsuarioUpdate):
     rol: None = Field(default=None, description="El rol de un operario no puede ser modificado.")

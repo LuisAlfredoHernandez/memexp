@@ -3,6 +3,8 @@ from datetime import datetime
 from enum import Enum
 import uuid
 
+from .insumo import UnidadMedida
+
 class EstadoOrden(str, Enum):
     PENDIENTE = "pendiente"
     EN_PROCESO = "en_proceso"
@@ -12,7 +14,7 @@ class EstadoOrden(str, Enum):
 class InsumoRequerido(BaseModel):
     insumo_id: uuid.UUID
     cantidad_requerida: float
-    unidad: str
+    unidad: UnidadMedida
 
 class TipoOP(str, Enum):
     MTO="MTO"
