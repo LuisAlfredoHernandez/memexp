@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class Token(BaseModel):
     access_token: str
@@ -6,3 +6,7 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     sub: str | None = None
+
+class PasswordReset(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8)
