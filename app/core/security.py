@@ -1,4 +1,8 @@
 from passlib.context import CryptContext
+from datetime import datetime, timedelta, timezone
+from typing import Any
+from jose import jwt
+from app.core.config import settings
 
 # Se crea una única instancia de CryptContext para ser reutilizada en toda la aplicación.
 # Esto es mucho más eficiente que crear una nueva en cada petición.
@@ -11,3 +15,17 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica una contraseña plana contra su hash."""
     return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(subject: Any, expires_delta: timedelta | None = None) -> str:
+    """
+    Crea un nuevo token de acceso JWT.
+    """
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
+    to_encode = {"exp": expire, "sub": str(subject)}
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
