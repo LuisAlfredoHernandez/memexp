@@ -1,27 +1,31 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
+import uuid
+
+from .insumo import UnidadMedida
 
 class EstadoOrden(str, Enum):
     PENDIENTE = "pendiente"
     EN_PROCESO = "en_proceso"
     COMPLETADA = "completada"
     CANCELADA = "cancelada"
+    PAUSADA = "pausada"
 
 class InsumoRequerido(BaseModel):
-    insumo_id: str
+    insumo_id: uuid.UUID
     cantidad_requerida: float
-    unidad: str
+    unidad: UnidadMedida
 
 class TipoOP(str, Enum):
     MTO="MTO"
     MTS="MTS"
 
 class Temporada(str, Enum):
-    PRIMAVERA = "P"
-    VERANO = "V"
-    OTONO= "O"
-    INVIERNO = "I"
+    PRIMAVERA = "Primavera"
+    VERANO = "Verano"
+    OTONO= "Otono"
+    INVIERNO = "Invierno"
     PERMANENTE = "permanente"
 
 class LineaOrden(BaseModel):
@@ -46,9 +50,9 @@ class OrdenBase(BaseModel):
     lineas: list[LineaOrden] = Field(..., min_length=1)
 
 class Orden(OrdenBase):
-    id: str | None = None
+    id: uuid.UUID
     fecha_creacion: datetime = Field(default_factory=datetime.now)
-    creada_por: str | None = None
+    creada_por_id: uuid.UUID | None = None
 
     class ConfigDict:
         from_attributes = True

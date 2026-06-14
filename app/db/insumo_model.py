@@ -1,7 +1,11 @@
 import uuid
-from sqlmodel import Field, SQLModel, JSON, Column
-from typing import List
+from sqlmodel import Field, SQLModel, Relationship
+from typing import List, TYPE_CHECKING
 from app.schemas.insumo import TipoInsumo, UnidadMedida
+
+if TYPE_CHECKING:
+    from .linea_orden_insumo_link import LineaOrdenInsumoLink
+
 
 class Insumo(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
@@ -12,4 +16,4 @@ class Insumo(SQLModel, table=True):
     stock: float = Field(default=0)
     minimo: float = Field(default=0)
     proveedor: str | None = None
-    vinculado_a: List[str] = Field(default=[], sa_column=Column(JSON))
+    vinculado_a: List["LineaOrdenInsumoLink"] = Relationship(back_populates="insumo")

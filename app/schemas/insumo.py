@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from enum import Enum
+import uuid
 
 class TipoInsumo(str, Enum):
     TELA = "tela"
@@ -15,6 +16,31 @@ class UnidadMedida(str, Enum):
     ROLLOS = "rollos"
     KG = "kg"
 
+class _OrdenInfoParaInsumo(BaseModel):
+    """Información básica de una orden para el contexto de un insumo."""
+    id: uuid.UUID
+    numero: str
+
+    class ConfigDict:
+        from_attributes = True
+
+class _LineaOrdenInfoParaInsumo(BaseModel):
+    """Información de una línea de orden para el contexto de un insumo."""
+    id: uuid.UUID
+    orden: _OrdenInfoParaInsumo
+
+    class ConfigDict:
+        from_attributes = True
+
+class InsumoEnOrden(BaseModel):
+    """Describe cómo y dónde se utiliza un insumo, en el contexto de una orden."""
+    cantidad_requerida: float
+    unidad: UnidadMedida
+    linea_orden: _LineaOrdenInfoParaInsumo
+
+    class ConfigDict:
+        from_attributes = True
+
 class InsumoBase(BaseModel):
     nombre: str = Field(..., min_length=1)
     codigo: str | None = None
@@ -23,13 +49,13 @@ class InsumoBase(BaseModel):
     stock: float = Field(default=0, ge=0)
     minimo: float = Field(default=0, ge=0)
     proveedor: str | None = None
-    vinculado_a: list[str] = []
 
 class InsumoCreate(InsumoBase):
     pass
 
 class Insumo(InsumoBase):
-    id: str
+    id: uuid.UUID
+    vinculado_a: list[InsumoEnOrden] = Field(default_factory=list)
 
     class ConfigDict:
         from_attributes = True
@@ -43,4 +69,3 @@ class InsumoUpdate(BaseModel):
     stock: float | None = Field(default=None, ge=0)
     minimo: float | None = Field(default=None, ge=0)
     proveedor: str | None = None
-    vinculado_a: list[str] | None = None
