@@ -1,8 +1,11 @@
 from sqlmodel import Field, SQLModel, Relationship
 from app.schemas.maquina import MaquinaEstado
-from app.schemas.operario import MaquinaTipo, Operario # Asumo que existe en el esquema de operario
+from app.schemas.operario import MaquinaTipo
 import uuid
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .operario_model import Operario
 
 class Maquina(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)

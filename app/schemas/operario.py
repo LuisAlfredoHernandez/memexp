@@ -1,5 +1,8 @@
-from pydantic import BaseModel, Field, EmailStr
-from enum import str, Enum
+from typing import Literal
+from pydantic import BaseModel, Field
+from enum import Enum
+import uuid
+from .usuario import UsuarioBase, UsuarioCreate, UsuarioUpdate, Rol, UsuarioEstado
 
 class MaquinaTipo(str, Enum):
     MERROW = "merrow"
@@ -12,19 +15,24 @@ class HabilidadMaquinaria(BaseModel):
     maquina: MaquinaTipo
     nivel_eficiencia: int = Field(default=0, ge=0, le=100)
 
-class OperarioBase(BaseModel):
-    nombre: str = Field(..., min_length=2)
-    apellido: str = Field(..., min_length=2)
-    correo: EmailStr
-    rol: str = "operario"
-    estado: str = "inactivo"
-    habilidades: list[HabilidadMaquinaria] = []
+class OperarioBase(UsuarioBase):
+    maquinaActual: MaquinaTipo
+    habilidades: list[HabilidadMaquinaria] = Field(default_factory=list)
+    orden_actual_id: uuid.UUID | None = Field(default=None, description="ID de la orden en la que el operario está trabajando actualmente")
 
-class OperarioCreate(OperarioBase):
-    pass
-
+class OperarioCreate(OperarioBase, UsuarioCreate):
+    rol: Literal[Rol.Operario] = Field(
+        default=Rol.Operario, 
+        description="El rol para este endpoint siempre será Operario y no se puede cambiar."
+    )
 class Operario(OperarioBase):
-    id: str | None = None
-
+    id: uuid.UUID
+    
     class ConfigDict:
         from_attributes = True
+
+class OperarioUpdate(UsuarioUpdate):
+    rol: None = Field(default=None, description="El rol de un operario no puede ser modificado.")
+    habilidades: list[HabilidadMaquinaria] | None = None
+    maquinaActual: MaquinaTipo | None = None
+    orden_actual_id: uuid.UUID | None = None

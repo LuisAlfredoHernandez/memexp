@@ -1,4 +1,6 @@
+from enum import Enum
 from pydantic import BaseModel, Field
+import uuid
 from .operario import MaquinaTipo # Reutilizamos el Enum de tipos
 
 class MaquinaEstado(str, Enum):
@@ -14,10 +16,10 @@ class MaquinaBase(BaseModel):
     modelo: str | None = None
     capacidad_por_hora: float = Field(..., ge=0)
     estado: MaquinaEstado
-    operario_asignado: str | None = None # ID del operario
+    operario_asignado_id: uuid.UUID | None = None # ID del operario
 
 class Maquina(MaquinaBase):
-    id: str | None = None
+    id: uuid.UUID
 
     class ConfigDict:
         from_attributes = True
@@ -25,5 +27,12 @@ class Maquina(MaquinaBase):
 class MaquinaCreate(MaquinaBase):
     pass
 
-class MaquinaUpdate(MaquinaBase):
-    pass
+class MaquinaUpdate(BaseModel):
+    codigo: str | None = Field(default=None, min_length=1)
+    tipo: MaquinaTipo | None = None
+    nombre: str | None = Field(default=None, min_length=2)
+    descripcion: str | None = None
+    modelo: str | None = None
+    capacidad_por_hora: float | None = Field(default=None, ge=0)
+    estado: MaquinaEstado | None = None
+    operario_asignado_id: uuid.UUID | None = None

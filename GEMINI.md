@@ -35,4 +35,12 @@ app/
     └── ml_engine/        # Módulo aislado del Motor de IA
         ├── __init__.py
         ├── predictor.py  # Clase principal de inferencia asíncrona
-        └── models/       # Binarios/Pesos del modelo (.pkl, .onnx)
+        └── models/       # Binarios/Pesos del modelo (.pkl, .onnx) ```
+
+---
+
+## 2. Gestión del Entorno con Docker
+
+El entorno de desarrollo y producción se gestiona a través de Docker y Docker Compose para asegurar la consistencia y reproducibilidad.
+
+**Directriz clave:** Cada cambio de código generado que introduzca nuevas dependencias de sistema, librerías de Python, o servicios externos (como bases de datos, colas de mensajes, etc.), **debe** ir acompañado de las actualizaciones correspondientes en los archivos `Dockerfile` y/o `docker-compose.yml`.
