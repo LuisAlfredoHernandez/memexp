@@ -22,3 +22,23 @@ class Operario(SQLModel, table=True):
 
     usuario: "Usuario" = Relationship(back_populates="operario")
     maquinas: List["Maquina"] = Relationship(back_populates="operario")
+
+    @property
+    def nombre(self) -> str:
+        return self.usuario.nombre if self.usuario else ""
+
+    @property
+    def apellido(self) -> str:
+        return self.usuario.apellido if self.usuario else ""
+
+    @property
+    def correo(self) -> str:
+        return self.usuario.correo if self.usuario else ""
+
+    @property
+    def rol(self) -> str:
+        return self.usuario.rol if self.usuario else ""
+
+    @property
+    def estado(self) -> str:
+        return self.usuario.estado if self.usuario else ""
