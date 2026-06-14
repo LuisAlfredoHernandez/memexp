@@ -58,7 +58,11 @@ def eliminar_usuario(id: uuid.UUID, db: Session = Depends(get_session)):
     db_usuario = db.get(Usuario, id)
     if not db_usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    db_usuario.estado = UsuarioEstado.INACTIVO
-    db.add(db_usuario)
+    
+    # Si el usuario tiene un operario asociado, se debe eliminar primero
+    if db_usuario.operario:
+        db.delete(db_usuario.operario)
+        
+    db.delete(db_usuario)
     db.commit()
     return

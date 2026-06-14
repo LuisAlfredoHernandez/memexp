@@ -17,7 +17,7 @@ def listar_operarios(db: Session = Depends(get_session)):
 
 @router.post("/", response_model=OperarioSchema, status_code=status.HTTP_201_CREATED)
 def crear_operario(operario: OperarioCreate, db: Session = Depends(get_session)):
-    user_create = UsuarioCreate.model_validate(operario)
+    user_create = UsuarioCreate.model_validate(operario.model_dump())
     
     hashed_password = hash_password(user_create.password)
     
@@ -33,6 +33,10 @@ def crear_operario(operario: OperarioCreate, db: Session = Depends(get_session))
     db.add(db_operario)
     db.commit()
     db.refresh(db_operario)
+    
+    # Asignar la relación de usuario para que Pydantic pueda leer las properties
+    db_operario.usuario = db_usuario
+    
     return db_operario
 
 @router.get("/{id}", response_model=OperarioSchema)

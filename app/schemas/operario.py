@@ -2,7 +2,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from enum import Enum
 import uuid
-from .usuario import UsuarioBase, UsuarioUpdate, Rol
+from .usuario import UsuarioBase, UsuarioCreate, UsuarioUpdate, Rol, UsuarioEstado
 
 class MaquinaTipo(str, Enum):
     MERROW = "merrow"
@@ -20,7 +20,7 @@ class OperarioBase(UsuarioBase):
     habilidades: list[HabilidadMaquinaria] = Field(default_factory=list)
     orden_actual_id: uuid.UUID | None = Field(default=None, description="ID de la orden en la que el operario está trabajando actualmente")
 
-class OperarioCreate(OperarioBase):
+class OperarioCreate(OperarioBase, UsuarioCreate):
     rol: Literal[Rol.Operario] = Field(
         default=Rol.Operario, 
         description="El rol para este endpoint siempre será Operario y no se puede cambiar."
