@@ -1,6 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel, EmailStr, Field
 import uuid
+from app.schemas.maquina import HabilidadMaquinaria, MaquinaTipo
 
 class Rol(str, Enum):
     Operario = "operario"
@@ -35,3 +36,12 @@ class UsuarioUpdate(BaseModel):
     rol: Rol | None = None
     estado: UsuarioEstado | None = None
     password: str | None = None
+
+class UsuarioMe(UsuarioBase):
+    id: uuid.UUID
+    orden_activa: uuid.UUID | None = None
+    maquina_actual: MaquinaTipo | None = None
+    habilidades: list[HabilidadMaquinaria] = []
+
+    class ConfigDict:
+        from_attributes = True

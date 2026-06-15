@@ -2,7 +2,7 @@ from sqlmodel import Field, SQLModel, Relationship, JSON, Column
 import uuid
 from typing import List, Optional, TYPE_CHECKING
 
-from app.schemas.operario import MaquinaTipo, HabilidadMaquinaria
+from app.schemas.maquina import MaquinaTipo, HabilidadMaquinaria
 
 if TYPE_CHECKING:
     from .maquina_model import Maquina

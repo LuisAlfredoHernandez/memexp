@@ -1,6 +1,5 @@
 from sqlmodel import Field, SQLModel, Relationship
-from app.schemas.maquina import MaquinaEstado
-from app.schemas.operario import MaquinaTipo
+from app.schemas.maquina import MaquinaEstado, MaquinaTipo
 import uuid
 from typing import Optional, TYPE_CHECKING
 

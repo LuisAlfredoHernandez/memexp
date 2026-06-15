@@ -1,7 +1,17 @@
 from enum import Enum
 from pydantic import BaseModel, Field
 import uuid
-from .operario import MaquinaTipo # Reutilizamos el Enum de tipos
+
+class MaquinaTipo(str, Enum):
+    MERROW = "merrow"
+    COVER = "cover"
+    PLANA = "plana"
+    CORTE = "corte"
+    PLANCHA_DTF = "plancha_dtf"
+
+class HabilidadMaquinaria(BaseModel):
+    maquina: MaquinaTipo
+    nivel_eficiencia: int = Field(default=0, ge=0, le=100)
 
 class MaquinaEstado(str, Enum):
     OPERATIVA = "operativa"
