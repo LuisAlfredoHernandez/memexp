@@ -6,9 +6,10 @@ from app.db.operario_model import Operario
 from app.db.usuario_model import Usuario
 from app.db.session import get_session
 from app.core.security import hash_password
+from app.api.deps import get_current_active_user
 import uuid
 
-router = APIRouter(prefix="/operarios", tags=["Planta - Operarios"])
+router = APIRouter(prefix="/operarios", tags=["Planta - Operarios"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[OperarioSchema])
 def listar_operarios(db: Session = Depends(get_session)):

@@ -3,9 +3,10 @@ from sqlmodel import Session, select
 from app.schemas.maquina import Maquina as MaquinaSchema, MaquinaCreate, MaquinaUpdate, MaquinaEstado
 from app.db.maquina_model import Maquina
 from app.db.session import get_session
+from app.api.deps import get_current_active_user
 import uuid
 
-router = APIRouter(prefix="/maquinas", tags=["Planta - Maquinaria"])
+router = APIRouter(prefix="/maquinas", tags=["Planta - Maquinaria"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[MaquinaSchema])
 def listar_maquinas(db: Session = Depends(get_session)):

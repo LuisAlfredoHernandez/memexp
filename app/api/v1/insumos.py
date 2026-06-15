@@ -3,9 +3,10 @@ from sqlmodel import Session, select
 from app.schemas.insumo import Insumo as InsumoSchema, InsumoCreate, InsumoUpdate
 from app.db.insumo_model import Insumo
 from app.db.session import get_session
+from app.api.deps import get_current_active_user
 import uuid
 
-router = APIRouter(prefix="/insumos", tags=["Inventario - Insumos"])
+router = APIRouter(prefix="/insumos", tags=["Inventario - Insumos"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[InsumoSchema])
 def obtener_insumos(db: Session = Depends(get_session)):

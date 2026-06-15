@@ -5,9 +5,10 @@ from app.db.orden_model import Orden as OrdenDB
 from app.db.linea_orden_model import LineaOrden as LineaOrdenDB
 from app.db.linea_orden_insumo_link import LineaOrdenInsumoLink
 from app.db.session import get_session
+from app.api.deps import get_current_active_user
 import uuid
 
-router = APIRouter(prefix="/ordenes", tags=["Producción - Órdenes"])
+router = APIRouter(prefix="/ordenes", tags=["Producción - Órdenes"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[OrdenSchema])
 def listar_ordenes(db: Session = Depends(get_session)):

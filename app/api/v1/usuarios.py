@@ -7,7 +7,7 @@ from app.core.security import hash_password
 from app.api.deps import get_current_active_user
 import uuid
 
-router = APIRouter(prefix="/usuarios", tags=["Administración - Usuarios"])
+router = APIRouter(prefix="/usuarios", tags=["Administración - Usuarios"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[UsuarioSchema])
 def listar_usuarios(db: Session = Depends(get_session)):
