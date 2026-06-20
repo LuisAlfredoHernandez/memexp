@@ -4,6 +4,7 @@ from app.schemas.orden import Orden as OrdenSchema, OrdenCreate, OrdenUpdate
 from app.db.orden_model import Orden as OrdenDB
 from app.db.linea_orden_model import LineaOrden as LineaOrdenDB
 from app.db.linea_orden_insumo_link import LineaOrdenInsumoLink
+from app.db.insumo_model import Insumo as InsumoDB
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
 import uuid
@@ -28,6 +29,30 @@ def crear_orden(orden: OrdenCreate, db: Session = Depends(get_session)):
         insumos_data = linea_item.pop("insumos")
         db_linea = LineaOrdenDB(**linea_item, orden=db_orden)
         for insumo_item in insumos_data:
+            # Obtener el insumo e ir restando el stock correspondiente
+            db_insumo = db.get(InsumoDB, insumo_item["insumo_id"])
+            if not db_insumo:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Insumo con ID {insumo_item['insumo_id']} no encontrado"
+                )
+                
+            if insumo_item["unidad"] != db_insumo.unidad_medida:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"La unidad del insumo no coincide con la unidad de la orden"
+                )
+            
+            # Validar que haya stock suficiente
+            if insumo_item["cantidad_requerida"] > db_insumo.stock:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No hay stock suficiente para la orden"
+                )
+            
+            db_insumo.stock -= insumo_item["cantidad_requerida"]
+            db.add(db_insumo)
+
             _ = LineaOrdenInsumoLink(
                 linea_orden=db_linea,
                 insumo_id=insumo_item["insumo_id"],

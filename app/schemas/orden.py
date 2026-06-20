@@ -35,7 +35,18 @@ class LineaOrden(BaseModel):
     cantidad_completada: int = 0
     talla: str
     color: str | None = None
-    insumos: list[InsumoRequerido] = []
+    insumos: list[InsumoRequerido] = Field(
+        default=[],
+        json_schema_extra={
+            "example": [
+                {
+                    "insumo_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                    "cantidad_requerida": 10.5,
+                    "unidad": "metros"
+                }
+            ]
+        }
+    )
 
 class OrdenBase(BaseModel):
     numero: str = Field(..., min_length=1)
@@ -48,6 +59,39 @@ class OrdenBase(BaseModel):
     notas: str | None = None
     cola: int | None = Field(default=None, ge=0)
     lineas: list[LineaOrden] = Field(..., min_length=1)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "numero": "OP-1234",
+                "cliente": "Distribuidora ACME",
+                "tipo": "MTO",
+                "estado": "pendiente",
+                "prioridad": "alta",
+                "temporada": "Primavera",
+                "fecha_entrega_estimada": "2026-06-25T14:30:00Z",
+                "notas": "Lotes prioritarios para despacho rápido.",
+                "cola": 1,
+                "lineas": [
+                    {
+                        "producto_tipo": "camiseta",
+                        "descripcion": "Camiseta estampada básica",
+                        "cantidad": 50,
+                        "cantidad_completada": 0,
+                        "talla": "L",
+                        "color": "rojo",
+                        "insumos": [
+                            {
+                                "insumo_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                                "cantidad_requerida": 75.0,
+                                "unidad": "metros"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
 
 class Orden(OrdenBase):
     id: uuid.UUID
