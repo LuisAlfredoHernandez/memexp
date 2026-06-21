@@ -15,7 +15,7 @@ class LineaOrden(SQLModel, table=True):
     producto_tipo: Optional[str] = None
     descripcion: str
     cantidad: int
-    cantidad_completada: int = Field(default=0)
+    cantidad_completada: Optional[int] = Field(default=0)
     talla: Talla
     color: Optional[str] = None
     orden_id: uuid.UUID = Field(foreign_key="orden.id")

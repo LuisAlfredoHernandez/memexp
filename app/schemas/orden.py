@@ -29,9 +29,9 @@ class Temporada(str, Enum):
     PERMANENTE = "permanente"
 
 class Talla(str, Enum):
-    CHICA = "S"
-    MEDIANA = "M"
-    GRANDE = "L"
+    S = "S"
+    M = "M"
+    L = "L"
     XL = "XL"
     XXL = "XXL"
     UNICA = "UNICA"
@@ -41,7 +41,7 @@ class LineaOrden(BaseModel):
     producto_tipo: str | None = None
     descripcion: str
     cantidad: int = Field(..., gt=0)
-    cantidad_completada: int = 0
+    cantidad_completada: int | None = 0
     talla: Talla
     color: str | None = None
     insumos: list[InsumoRequerido] = Field(
