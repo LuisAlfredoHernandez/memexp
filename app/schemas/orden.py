@@ -26,7 +26,7 @@ class Temporada(str, Enum):
     VERANO = "Verano"
     OTONO= "Otono"
     INVIERNO = "Invierno"
-    PERMANENTE = "permanente"
+    OTRO = "OTRO"
 
 class Talla(str, Enum):
     S = "S"
