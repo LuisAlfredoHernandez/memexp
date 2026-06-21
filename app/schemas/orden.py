@@ -29,12 +29,12 @@ class Temporada(str, Enum):
     OTRO = "OTRO"
 
 class Talla(str, Enum):
+    XS = "XS"
     S = "S"
     M = "M"
     L = "L"
     XL = "XL"
     XXL = "XXL"
-    UNICA = "UNICA"
     MIXTA = "MIXTA"
 
 class LineaOrden(BaseModel):
