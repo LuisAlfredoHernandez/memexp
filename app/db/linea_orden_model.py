@@ -1,6 +1,7 @@
 from sqlmodel import Field, SQLModel, Relationship
 import uuid
 from typing import List, Optional, TYPE_CHECKING
+from app.schemas.orden import Talla
 
 if TYPE_CHECKING:
     from .linea_orden_insumo_link import LineaOrdenInsumoLink
@@ -15,7 +16,7 @@ class LineaOrden(SQLModel, table=True):
     descripcion: str
     cantidad: int
     cantidad_completada: int = Field(default=0)
-    talla: str
+    talla: Talla
     color: Optional[str] = None
     orden_id: uuid.UUID = Field(foreign_key="orden.id")
     orden: "Orden" = Relationship(back_populates="lineas")

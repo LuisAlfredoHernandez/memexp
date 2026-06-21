@@ -28,12 +28,21 @@ class Temporada(str, Enum):
     INVIERNO = "Invierno"
     PERMANENTE = "permanente"
 
+class Talla(str, Enum):
+    CHICA = "S"
+    MEDIANA = "M"
+    GRANDE = "L"
+    XL = "XL"
+    XXL = "XXL"
+    UNICA = "UNICA"
+    MIXTA = "MIXTA"
+
 class LineaOrden(BaseModel):
     producto_tipo: str | None = None
     descripcion: str
     cantidad: int = Field(..., gt=0)
     cantidad_completada: int = 0
-    talla: str
+    talla: Talla
     color: str | None = None
     insumos: list[InsumoRequerido] = Field(
         default=[],
@@ -52,12 +61,10 @@ class OrdenBase(BaseModel):
     numero: str = Field(..., min_length=1)
     cliente: str = Field(..., min_length=2)
     tipo: TipoOP
-    estado: EstadoOrden
     prioridad: str
     temporada: Temporada | None = None 
     fecha_entrega_estimada: datetime
     notas: str | None = None
-    cola: int | None = Field(default=None, ge=0)
     lineas: list[LineaOrden] = Field(..., min_length=1)
 
     model_config = {
@@ -66,12 +73,10 @@ class OrdenBase(BaseModel):
                 "numero": "OP-1234",
                 "cliente": "Distribuidora ACME",
                 "tipo": "MTO",
-                "estado": "pendiente",
                 "prioridad": "alta",
                 "temporada": "Primavera",
                 "fecha_entrega_estimada": "2026-06-25T14:30:00Z",
                 "notas": "Lotes prioritarios para despacho rápido.",
-                "cola": 1,
                 "lineas": [
                     {
                         "producto_tipo": "camiseta",
@@ -95,8 +100,9 @@ class OrdenBase(BaseModel):
 
 class Orden(OrdenBase):
     id: uuid.UUID
+    estado: EstadoOrden
+    cola: int | None = None
     fecha_creacion: datetime = Field(default_factory=datetime.now)
-    creada_por_id: uuid.UUID | None = None
 
     class ConfigDict:
         from_attributes = True

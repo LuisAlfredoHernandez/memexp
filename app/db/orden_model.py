@@ -13,13 +13,12 @@ class Orden(SQLModel, table=True):
     numero: str = Field(index=True, unique=True)
     cliente: str
     tipo: TipoOP
-    estado: EstadoOrden
     prioridad: str
     temporada: Optional[Temporada] = None
     fecha_entrega_estimada: datetime
     notas: Optional[str] = None
+    estado: EstadoOrden = Field(default=EstadoOrden.PENDIENTE)
     cola: Optional[int] = None
-    fecha_creacion: datetime = Field(default_factory=datetime.now(timezone.utc))
-    creada_por_id: Optional[uuid.UUID] = Field(default=None, foreign_key="usuario.id")
+    fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     lineas: List["LineaOrden"] = Relationship(back_populates="orden")

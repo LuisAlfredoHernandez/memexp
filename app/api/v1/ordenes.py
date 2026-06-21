@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from app.schemas.orden import Orden as OrdenSchema, OrdenCreate, OrdenUpdate
 from app.db.orden_model import Orden as OrdenDB
 from app.db.linea_orden_model import LineaOrden as LineaOrdenDB
@@ -24,6 +24,11 @@ def crear_orden(orden: OrdenCreate, db: Session = Depends(get_session)):
     # Crea el objeto Orden principal
     db_orden = OrdenDB(**orden_data)
     
+    # Autoincrementar la cola si no se especifica
+    if db_orden.cola is None:
+        max_cola = db.exec(select(func.max(OrdenDB.cola))).one()
+        db_orden.cola = (max_cola or 0) + 1
+    
     # Crea los objetos anidados en memoria. SQLModel los asociará.
     for linea_item in lineas_data:
         insumos_data = linea_item.pop("insumos")
@@ -36,8 +41,8 @@ def crear_orden(orden: OrdenCreate, db: Session = Depends(get_session)):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Insumo con ID {insumo_item['insumo_id']} no encontrado"
                 )
-                
-            if insumo_item["unidad"] != db_insumo.unidad_medida:
+
+            if insumo_item["unidad"] != db_insumo.unidad:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"La unidad del insumo no coincide con la unidad de la orden"
