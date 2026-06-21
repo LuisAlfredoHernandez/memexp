@@ -58,7 +58,6 @@ class LineaOrden(BaseModel):
     )
 
 class OrdenBase(BaseModel):
-    numero: str = Field(..., min_length=1)
     cliente: str = Field(..., min_length=2)
     tipo: TipoOP
     prioridad: str
@@ -70,7 +69,6 @@ class OrdenBase(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "numero": "OP-1234",
                 "cliente": "Distribuidora ACME",
                 "tipo": "MTO",
                 "prioridad": "alta",
@@ -100,6 +98,7 @@ class OrdenBase(BaseModel):
 
 class Orden(OrdenBase):
     id: uuid.UUID
+    numero: str
     estado: EstadoOrden
     cola: int | None = None
     fecha_creacion: datetime = Field(default_factory=datetime.now)
@@ -111,7 +110,6 @@ class OrdenCreate(OrdenBase):
     pass
 
 class OrdenUpdate(BaseModel):
-    numero: str | None = Field(default=None, min_length=1)
     cliente: str | None = Field(default=None, min_length=2)
     tipo: TipoOP | None = None
     estado: EstadoOrden | None = None

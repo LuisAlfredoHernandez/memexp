@@ -8,6 +8,7 @@ from app.db.insumo_model import Insumo as InsumoDB
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
 import uuid
+import re
 
 router = APIRouter(prefix="/ordenes", tags=["Producción - Órdenes"], dependencies=[Depends(get_current_active_user)])
 
@@ -21,8 +22,20 @@ def crear_orden(orden: OrdenCreate, db: Session = Depends(get_session)):
     orden_data = orden.model_dump()
     lineas_data = orden_data.pop("lineas")
     
+    # Generar el número de orden autoincremental (OP + TipoOP + número)
+    todas_ordenes = db.exec(select(OrdenDB.numero)).all()
+    max_num = 0
+    for num_str in todas_ordenes:
+        match = re.search(r'\d+$', num_str)
+        if match:
+            num = int(match.group())
+            if num > max_num:
+                max_num = num
+    next_num = max_num + 1
+    numero_orden = f"OP{orden.tipo.value}{next_num}"
+    
     # Crea el objeto Orden principal
-    db_orden = OrdenDB(**orden_data)
+    db_orden = OrdenDB(numero=numero_orden, **orden_data)
     
     # Autoincrementar la cola si no se especifica
     if db_orden.cola is None:
