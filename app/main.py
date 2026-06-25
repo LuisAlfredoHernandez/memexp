@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.api.v1 import auth, insumos, operarios, maquinas, ordenes, usuarios
+from app.api.v1 import auth, insumos, operarios, maquinas, ordenes, usuarios, asignaciones, reportes_avance, reportes_averia
 from app.db.session import create_db_and_tables
 
 @asynccontextmanager
@@ -23,6 +23,10 @@ app.include_router(operarios.router)
 app.include_router(maquinas.router)
 app.include_router(ordenes.router)
 app.include_router(usuarios.router)
+app.include_router(asignaciones.router)
+app.include_router(reportes_avance.router)
+app.include_router(reportes_averia.router)
+
 
 @app.get("/")
 async def root():

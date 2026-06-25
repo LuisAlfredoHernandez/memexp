@@ -7,6 +7,7 @@ from app.schemas.orden import EstadoOrden, TipoOP, Temporada
 
 if TYPE_CHECKING:
     from .linea_orden_model import LineaOrden
+    from .asignacion_model import AsignacionOrden
 
 class Orden(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
@@ -22,3 +23,4 @@ class Orden(SQLModel, table=True):
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     lineas: List["LineaOrden"] = Relationship(back_populates="orden")
+    asignaciones: List["AsignacionOrden"] = Relationship(back_populates="orden", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
