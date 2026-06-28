@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from sqlmodel import Session, select, func
 from app.schemas.orden import Orden as OrdenSchema, OrdenCreate, OrdenUpdate
 from app.db.orden_model import Orden as OrdenDB
@@ -7,6 +7,7 @@ from app.db.linea_orden_insumo_link import LineaOrdenInsumoLink
 from app.db.insumo_model import Insumo as InsumoDB
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
+from app.core.websocket import manager
 import uuid
 import re
 
@@ -18,7 +19,7 @@ def listar_ordenes(db: Session = Depends(get_session)):
     return ordenes
 
 @router.post("/", response_model=OrdenSchema, status_code=status.HTTP_201_CREATED)
-def crear_orden(orden: OrdenCreate, db: Session = Depends(get_session)):
+def crear_orden(orden: OrdenCreate, db: Session = Depends(get_session), background_tasks: BackgroundTasks = None):
     orden_data = orden.model_dump()
     lineas_data = orden_data.pop("lineas")
     
@@ -81,6 +82,14 @@ def crear_orden(orden: OrdenCreate, db: Session = Depends(get_session)):
     db.add(db_orden)
     db.commit()
     db.refresh(db_orden)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "order_created",
+            "orden_id": str(db_orden.id),
+            "numero": db_orden.numero,
+            "estado": db_orden.estado.value if hasattr(db_orden.estado, "value") else str(db_orden.estado),
+            "prioridad": db_orden.prioridad.value if hasattr(db_orden.prioridad, "value") else str(db_orden.prioridad)
+        })
     return db_orden
 
 @router.get("/{id}", response_model=OrdenSchema)
@@ -91,7 +100,7 @@ def obtener_orden(id: uuid.UUID, db: Session = Depends(get_session)):
     return db_orden
 
 @router.patch("/{id}", response_model=OrdenSchema)
-def actualizar_orden(id: uuid.UUID, orden: OrdenUpdate, db: Session = Depends(get_session)):
+def actualizar_orden(id: uuid.UUID, orden: OrdenUpdate, db: Session = Depends(get_session), background_tasks: BackgroundTasks = None):
     db_orden = db.get(OrdenDB, id)
     if not db_orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -117,13 +126,26 @@ def actualizar_orden(id: uuid.UUID, orden: OrdenUpdate, db: Session = Depends(ge
     db.add(db_orden)
     db.commit()
     db.refresh(db_orden)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "order_updated",
+            "orden_id": str(db_orden.id),
+            "numero": db_orden.numero,
+            "estado": db_orden.estado.value if hasattr(db_orden.estado, "value") else str(db_orden.estado),
+            "prioridad": db_orden.prioridad.value if hasattr(db_orden.prioridad, "value") else str(db_orden.prioridad)
+        })
     return db_orden
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_orden(id: uuid.UUID, db: Session = Depends(get_session)):
+def eliminar_orden(id: uuid.UUID, db: Session = Depends(get_session), background_tasks: BackgroundTasks = None):
     db_orden = db.get(OrdenDB, id)
     if not db_orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     db.delete(db_orden)
     db.commit()
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "order_deleted",
+            "orden_id": str(id)
+        })
     return

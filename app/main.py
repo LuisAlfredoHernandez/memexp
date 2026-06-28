@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from contextlib import asynccontextmanager
 from app.api.v1 import auth, insumos, operarios, maquinas, ordenes, usuarios, asignaciones, reportes_avance, reportes_averia
 from app.db.session import create_db_and_tables
+from app.core.websocket import manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -15,6 +16,17 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+@app.websocket("/ws/updates")
+async def websocket_updates(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Mantener el socket abierto y responder a pings/mensajes si aplica
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
 
 # Inclusión de routers
 app.include_router(auth.router)
