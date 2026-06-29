@@ -1,11 +1,14 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from sqlmodel import Session, select
 from app.schemas.maquina import Maquina as MaquinaSchema, MaquinaCreate, MaquinaUpdate, MaquinaEstado
 from app.db.maquina_model import Maquina
 from app.db.session import get_session
+from app.api.deps import get_current_active_user
+from app.db.usuario_model import Usuario
+from app.core.websocket import manager
 import uuid
 
-router = APIRouter(prefix="/maquinas", tags=["Planta - Maquinaria"])
+router = APIRouter(prefix="/maquinas", tags=["Planta - Maquinaria"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[MaquinaSchema])
 def listar_maquinas(db: Session = Depends(get_session)):
@@ -13,11 +16,21 @@ def listar_maquinas(db: Session = Depends(get_session)):
     return maquinas
 
 @router.post("/", response_model=MaquinaSchema, status_code=status.HTTP_201_CREATED)
-def crear_maquina(maquina: MaquinaCreate, db: Session = Depends(get_session)):
+def crear_maquina(
+    maquina: MaquinaCreate,
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
+):
     db_maquina = Maquina.model_validate(maquina)
     db.add(db_maquina)
     db.commit()
     db.refresh(db_maquina)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "machine_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_maquina
 
 @router.get("/{id}", response_model=MaquinaSchema)
@@ -28,7 +41,13 @@ def obtener_maquina(id: uuid.UUID, db: Session = Depends(get_session)):
     return db_maquina
 
 @router.patch("/{id}", response_model=MaquinaSchema)
-def actualizar_maquina(id: uuid.UUID, maquina: MaquinaUpdate, db: Session = Depends(get_session)):
+def actualizar_maquina(
+    id: uuid.UUID,
+    maquina: MaquinaUpdate,
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
+):
     db_maquina = db.get(Maquina, id)
     if not db_maquina:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Máquina no encontrada")
@@ -40,14 +59,29 @@ def actualizar_maquina(id: uuid.UUID, maquina: MaquinaUpdate, db: Session = Depe
     db.add(db_maquina)
     db.commit()
     db.refresh(db_maquina)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "machine_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_maquina
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_maquina(id: uuid.UUID, db: Session = Depends(get_session)):
+def eliminar_maquina(
+    id: uuid.UUID,
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
+):
     db_maquina = db.get(Maquina, id)
     if not db_maquina:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Máquina no encontrada")
     db_maquina.estado = MaquinaEstado.FUERA_SERVICIO
     db.add(db_maquina)
     db.commit()
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "machine_updated",
+            "usuario_id": str(current_user.id)
+        })
     return

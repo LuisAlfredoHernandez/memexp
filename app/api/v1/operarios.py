@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, Depends, HTTPException
+from fastapi import APIRouter, status, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from app.schemas.operario import Operario as OperarioSchema, OperarioCreate, OperarioUpdate
 from app.schemas.usuario import UsuarioCreate, UsuarioUpdate
@@ -6,9 +6,11 @@ from app.db.operario_model import Operario
 from app.db.usuario_model import Usuario
 from app.db.session import get_session
 from app.core.security import hash_password
+from app.api.deps import get_current_active_user
+from app.core.websocket import manager
 import uuid
 
-router = APIRouter(prefix="/operarios", tags=["Planta - Operarios"])
+router = APIRouter(prefix="/operarios", tags=["Planta - Operarios"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[OperarioSchema])
 def listar_operarios(db: Session = Depends(get_session)):
@@ -16,7 +18,12 @@ def listar_operarios(db: Session = Depends(get_session)):
     return operarios
 
 @router.post("/", response_model=OperarioSchema, status_code=status.HTTP_201_CREATED)
-def crear_operario(operario: OperarioCreate, db: Session = Depends(get_session)):
+def crear_operario(
+    operario: OperarioCreate,
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
+):
     user_create = UsuarioCreate.model_validate(operario.model_dump())
     
     hashed_password = hash_password(user_create.password)
@@ -36,7 +43,11 @@ def crear_operario(operario: OperarioCreate, db: Session = Depends(get_session))
     
     # Asignar la relación de usuario para que Pydantic pueda leer las properties
     db_operario.usuario = db_usuario
-    
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "operator_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_operario
 
 @router.get("/{id}", response_model=OperarioSchema)
@@ -47,7 +58,13 @@ def obtener_operario(id: uuid.UUID, db: Session = Depends(get_session)):
     return db_operario
 
 @router.patch("/{id}", response_model=OperarioSchema)
-def actualizar_operario(id: uuid.UUID, operario: OperarioUpdate, db: Session = Depends(get_session)):
+def actualizar_operario(
+    id: uuid.UUID,
+    operario: OperarioUpdate,
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
+):
     db_operario = db.get(Operario, id)
     if not db_operario:
         raise HTTPException(status_code=404, detail="Operario no encontrado")
@@ -75,15 +92,23 @@ def actualizar_operario(id: uuid.UUID, operario: OperarioUpdate, db: Session = D
             elif field != "password":
                 setattr(db_usuario, field, value)
 
-    db.add(db_operario)
     db.add(db_usuario)
     db.commit()
     db.refresh(db_operario)
-    
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "operator_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_operario
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_operario(id: uuid.UUID, db: Session = Depends(get_session)):
+def eliminar_operario(
+    id: uuid.UUID,
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
+):
     db_operario = db.get(Operario, id)
     if not db_operario:
         raise HTTPException(status_code=404, detail="Operario no encontrado")
@@ -91,4 +116,9 @@ def eliminar_operario(id: uuid.UUID, db: Session = Depends(get_session)):
     db.delete(db_operario)
     db.delete(db_operario.usuario) # La relación debe estar cargada
     db.commit()
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "operator_updated",
+            "usuario_id": str(current_user.id)
+        })
     return
