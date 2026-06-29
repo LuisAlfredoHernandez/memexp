@@ -1,4 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api.v1 import auth, insumos, operarios, maquinas, ordenes, usuarios, asignaciones, reportes_avance, reportes_averia
 from app.db.session import create_db_and_tables
@@ -15,6 +16,15 @@ app = FastAPI(
     title="Meme Fábricas API",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Configurar middleware CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.websocket("/ws/updates")
