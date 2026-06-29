@@ -47,3 +47,11 @@ class Operario(SQLModel, table=True):
     @property
     def estado(self) -> str:
         return self.usuario.estado if self.usuario else ""
+
+    @property
+    def piezas_buenas(self) -> int:
+        return sum(r.piezas_buenas for r in self.reportes_avance if r.estado == "validado")
+
+    @property
+    def piezas_defectuosas(self) -> int:
+        return sum(r.piezas_defectuosas for r in self.reportes_avance if r.estado == "validado")

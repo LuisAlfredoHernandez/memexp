@@ -52,7 +52,12 @@ def crear_asignacion(
     db.commit()
     db.refresh(db_asignacion)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "assignment_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "assignment_updated",
+            "action": "created",
+            "usuario_id": str(current_user.id),
+            "operario_id": str(db_asignacion.operario_id)
+        })
     return db_asignacion
 
 @router.patch("/{id}", response_model=AsignacionResponse)
@@ -93,7 +98,12 @@ def actualizar_asignacion(
     db.commit()
     db.refresh(db_asignacion)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "assignment_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "assignment_updated",
+            "action": "updated",
+            "usuario_id": str(current_user.id),
+            "operario_id": str(db_asignacion.operario_id)
+        })
     return db_asignacion
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -116,5 +126,10 @@ def eliminar_asignacion(
     db.delete(db_asignacion)
     db.commit()
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "assignment_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "assignment_updated",
+            "action": "deleted",
+            "usuario_id": str(current_user.id),
+            "operario_id": str(db_asignacion.operario_id)
+        })
     return

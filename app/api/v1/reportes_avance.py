@@ -85,7 +85,10 @@ def crear_reporte_avance(
     db.commit()
     db.refresh(db_reporte)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "reporte_avance_created"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "reporte_avance_created",
+            "usuario_id": str(current_user.id)
+        })
     return build_response(db_reporte)
 
 @router.get("/pendientes", response_model=list[ReporteAvanceResponse])
@@ -142,8 +145,10 @@ def validar_reporte_avance(
     db_reporte.fecha_validacion = datetime.now(timezone.utc)
     
     # Consolidar avance si es validado
+    db_asignacion = db.get(AsignacionOrden, db_reporte.asignacion_id)
+    orden_numero = db_asignacion.orden.numero if db_asignacion and db_asignacion.orden else ""
+    
     if payload.estado == "validado":
-        db_asignacion = db.get(AsignacionOrden, db_reporte.asignacion_id)
         if db_asignacion:
             db_asignacion.piezas_completadas += payload.piezas_buenas
             
@@ -159,5 +164,14 @@ def validar_reporte_avance(
     db.commit()
     db.refresh(db_reporte)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "reporte_avance_validated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "reporte_avance_validated",
+            "usuario_id": str(current_user.id),
+            "operario_id": str(db_reporte.operario_id),
+            "estado": payload.estado,
+            "piezas_reportadas": db_reporte.piezas_reportadas,
+            "piezas_buenas": payload.piezas_buenas,
+            "piezas_defectuosas": payload.piezas_defectuosas,
+            "orden_numero": orden_numero
+        })
     return build_response(db_reporte)

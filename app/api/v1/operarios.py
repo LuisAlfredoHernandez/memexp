@@ -21,7 +21,8 @@ def listar_operarios(db: Session = Depends(get_session)):
 def crear_operario(
     operario: OperarioCreate,
     db: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
 ):
     user_create = UsuarioCreate.model_validate(operario.model_dump())
     
@@ -43,7 +44,10 @@ def crear_operario(
     # Asignar la relación de usuario para que Pydantic pueda leer las properties
     db_operario.usuario = db_usuario
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "operator_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "operator_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_operario
 
 @router.get("/{id}", response_model=OperarioSchema)
@@ -58,7 +62,8 @@ def actualizar_operario(
     id: uuid.UUID,
     operario: OperarioUpdate,
     db: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
 ):
     db_operario = db.get(Operario, id)
     if not db_operario:
@@ -91,14 +96,18 @@ def actualizar_operario(
     db.commit()
     db.refresh(db_operario)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "operator_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "operator_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_operario
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_operario(
     id: uuid.UUID,
     db: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
 ):
     db_operario = db.get(Operario, id)
     if not db_operario:
@@ -108,5 +117,8 @@ def eliminar_operario(
     db.delete(db_operario.usuario) # La relación debe estar cargada
     db.commit()
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "operator_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "operator_updated",
+            "usuario_id": str(current_user.id)
+        })
     return

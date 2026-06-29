@@ -4,6 +4,7 @@ from app.schemas.maquina import Maquina as MaquinaSchema, MaquinaCreate, Maquina
 from app.db.maquina_model import Maquina
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
+from app.db.usuario_model import Usuario
 from app.core.websocket import manager
 import uuid
 
@@ -18,14 +19,18 @@ def listar_maquinas(db: Session = Depends(get_session)):
 def crear_maquina(
     maquina: MaquinaCreate,
     db: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
 ):
     db_maquina = Maquina.model_validate(maquina)
     db.add(db_maquina)
     db.commit()
     db.refresh(db_maquina)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "machine_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "machine_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_maquina
 
 @router.get("/{id}", response_model=MaquinaSchema)
@@ -40,7 +45,8 @@ def actualizar_maquina(
     id: uuid.UUID,
     maquina: MaquinaUpdate,
     db: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
 ):
     db_maquina = db.get(Maquina, id)
     if not db_maquina:
@@ -54,14 +60,18 @@ def actualizar_maquina(
     db.commit()
     db.refresh(db_maquina)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "machine_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "machine_updated",
+            "usuario_id": str(current_user.id)
+        })
     return db_maquina
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_maquina(
     id: uuid.UUID,
     db: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
 ):
     db_maquina = db.get(Maquina, id)
     if not db_maquina:
@@ -70,5 +80,8 @@ def eliminar_maquina(
     db.add(db_maquina)
     db.commit()
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "machine_updated"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "machine_updated",
+            "usuario_id": str(current_user.id)
+        })
     return

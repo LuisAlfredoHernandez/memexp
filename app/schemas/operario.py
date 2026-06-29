@@ -16,6 +16,8 @@ class OperarioCreate(OperarioBase, UsuarioCreate):
     )
 class Operario(OperarioBase):
     id: uuid.UUID
+    piezas_buenas: int = 0
+    piezas_defectuosas: int = 0
     
     class ConfigDict:
         from_attributes = True

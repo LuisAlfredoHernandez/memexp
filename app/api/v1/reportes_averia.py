@@ -23,7 +23,8 @@ def listar_reportes_averia(
 def crear_reporte_averia(
     reporte: ReporteAveriaCreate,
     db: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Usuario = Depends(get_current_active_user)
 ):
     # Validar que existe la máquina
     db_maquina = db.get(Maquina, reporte.maquina_id)
@@ -40,5 +41,10 @@ def crear_reporte_averia(
     db.commit()
     db.refresh(db_reporte)
     if background_tasks:
-        background_tasks.add_task(manager.broadcast, {"event": "reporte_averia_created"})
+        background_tasks.add_task(manager.broadcast, {
+            "event": "reporte_averia_created",
+            "usuario_id": str(current_user.id),
+            "maquina_codigo": db_maquina.codigo,
+            "maquina_tipo": db_maquina.tipo
+        })
     return db_reporte
