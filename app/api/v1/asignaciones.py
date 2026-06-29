@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, Depends, HTTPException
+from fastapi import APIRouter, status, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from app.schemas.asignacion import AsignacionResponse, AsignacionCreate, AsignacionUpdate
 from app.db.asignacion_model import AsignacionOrden
@@ -8,6 +8,7 @@ from app.db.usuario_model import Usuario
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
 from app.schemas.usuario import Rol
+from app.core.websocket import manager
 import uuid
 
 router = APIRouter(prefix="/asignaciones", tags=["Planta - Asignaciones"], dependencies=[Depends(get_current_active_user)])
@@ -27,7 +28,8 @@ def listar_asignaciones(
 def crear_asignacion(
     asignacion: AsignacionCreate,
     current_user: Usuario = Depends(get_current_active_user),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None
 ):
     if current_user.rol not in [Rol.Administrador, Rol.Supervisor]:
         raise HTTPException(
@@ -49,6 +51,8 @@ def crear_asignacion(
     db.add(db_asignacion)
     db.commit()
     db.refresh(db_asignacion)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {"event": "assignment_updated"})
     return db_asignacion
 
 @router.patch("/{id}", response_model=AsignacionResponse)
@@ -56,7 +60,8 @@ def actualizar_asignacion(
     id: uuid.UUID,
     asignacion_update: AsignacionUpdate,
     current_user: Usuario = Depends(get_current_active_user),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None
 ):
     db_asignacion = db.get(AsignacionOrden, id)
     if not db_asignacion:
@@ -87,13 +92,16 @@ def actualizar_asignacion(
     db.add(db_asignacion)
     db.commit()
     db.refresh(db_asignacion)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {"event": "assignment_updated"})
     return db_asignacion
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_asignacion(
     id: uuid.UUID,
     current_user: Usuario = Depends(get_current_active_user),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None
 ):
     if current_user.rol not in [Rol.Administrador, Rol.Supervisor]:
         raise HTTPException(
@@ -107,4 +115,6 @@ def eliminar_asignacion(
         
     db.delete(db_asignacion)
     db.commit()
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {"event": "assignment_updated"})
     return

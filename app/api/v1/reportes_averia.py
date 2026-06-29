@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, Depends, HTTPException
+from fastapi import APIRouter, status, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from app.schemas.reporte_averia import ReporteAveriaResponse, ReporteAveriaCreate
 from app.db.reporte_averia_model import ReporteAveria
@@ -7,6 +7,7 @@ from app.db.session import get_session
 from app.api.deps import get_current_active_user
 from app.db.usuario_model import Usuario
 from app.schemas.maquina import MaquinaEstado
+from app.core.websocket import manager
 import uuid
 
 router = APIRouter(prefix="/reportes-averia", tags=["Planta - Reportes de Avería"], dependencies=[Depends(get_current_active_user)])
@@ -21,7 +22,8 @@ def listar_reportes_averia(
 @router.post("/", response_model=ReporteAveriaResponse, status_code=status.HTTP_201_CREATED)
 def crear_reporte_averia(
     reporte: ReporteAveriaCreate,
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None
 ):
     # Validar que existe la máquina
     db_maquina = db.get(Maquina, reporte.maquina_id)
@@ -37,4 +39,6 @@ def crear_reporte_averia(
     
     db.commit()
     db.refresh(db_reporte)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {"event": "reporte_averia_created"})
     return db_reporte

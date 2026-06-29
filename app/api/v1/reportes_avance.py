@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, Depends, HTTPException
+from fastapi import APIRouter, status, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from datetime import datetime, timezone
 import uuid
@@ -11,6 +11,7 @@ from app.db.reporte_avance_model import ReporteAvance
 from app.schemas.reporte_avance import ReporteAvanceCreate, ReporteAvanceResponse, ReporteAvanceValidar
 from app.schemas.usuario import Rol
 from app.api.deps import get_current_active_user
+from app.core.websocket import manager
 
 router = APIRouter(prefix="/reportes-avance", tags=["Planta - Reportes de Avance"], dependencies=[Depends(get_current_active_user)])
 
@@ -45,7 +46,8 @@ def build_response(reporte: ReporteAvance) -> ReporteAvanceResponse:
 def crear_reporte_avance(
     payload: ReporteAvanceCreate,
     current_user: Usuario = Depends(get_current_active_user),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None
 ):
     # Validar que existe la asignación
     db_asignacion = db.get(AsignacionOrden, payload.asignacion_id)
@@ -82,6 +84,8 @@ def crear_reporte_avance(
     db.add(db_reporte)
     db.commit()
     db.refresh(db_reporte)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {"event": "reporte_avance_created"})
     return build_response(db_reporte)
 
 @router.get("/pendientes", response_model=list[ReporteAvanceResponse])
@@ -103,7 +107,8 @@ def validar_reporte_avance(
     id: uuid.UUID,
     payload: ReporteAvanceValidar,
     current_user: Usuario = Depends(get_current_active_user),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None
 ):
     if current_user.rol not in [Rol.Administrador, Rol.Supervisor]:
         raise HTTPException(
@@ -153,4 +158,6 @@ def validar_reporte_avance(
     db.add(db_reporte)
     db.commit()
     db.refresh(db_reporte)
+    if background_tasks:
+        background_tasks.add_task(manager.broadcast, {"event": "reporte_avance_validated"})
     return build_response(db_reporte)
