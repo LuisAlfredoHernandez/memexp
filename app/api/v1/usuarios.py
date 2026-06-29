@@ -1,12 +1,13 @@
 from fastapi import APIRouter, status, Depends, HTTPException
 from sqlmodel import Session, select
-from app.schemas.usuario import Usuario as UsuarioSchema, UsuarioCreate, UsuarioUpdate, UsuarioEstado
+from app.schemas.usuario import Usuario as UsuarioSchema, UsuarioCreate, UsuarioUpdate, UsuarioEstado, UsuarioMe
 from app.db.usuario_model import Usuario
 from app.db.session import get_session
 from app.core.security import hash_password
+from app.api.deps import get_current_active_user
 import uuid
 
-router = APIRouter(prefix="/usuarios", tags=["Administración - Usuarios"])
+router = APIRouter(prefix="/usuarios", tags=["Administración - Usuarios"], dependencies=[Depends(get_current_active_user)])
 
 @router.get("/", response_model=list[UsuarioSchema])
 def listar_usuarios(db: Session = Depends(get_session)):
@@ -24,6 +25,27 @@ def crear_usuario(usuario: UsuarioCreate, db: Session = Depends(get_session)):
     db.commit()
     db.refresh(db_usuario)
     return db_usuario
+
+@router.get("/me", response_model=UsuarioMe)
+def obtener_usuario_actual(current_user: Usuario = Depends(get_current_active_user)):
+    user_data = current_user.model_dump()
+    orden_activa = None
+    maquina_actual = None
+    habilidades = []
+    
+    if current_user.operario:
+        if current_user.operario.orden_actual_id:
+            orden_activa = current_user.operario.orden_actual_id
+        if current_user.operario.maquinaActual:
+            maquina_actual = current_user.operario.maquinaActual
+        if current_user.operario.habilidades:
+            habilidades = current_user.operario.habilidades
+            
+    user_data["orden_activa"] = orden_activa
+    user_data["maquina_actual"] = maquina_actual
+    user_data["habilidades"] = habilidades
+    
+    return user_data
 
 @router.get("/{id}", response_model=UsuarioSchema)
 def obtener_usuario(id: uuid.UUID, db: Session = Depends(get_session)):

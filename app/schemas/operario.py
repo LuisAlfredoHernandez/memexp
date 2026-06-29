@@ -1,19 +1,8 @@
 from typing import Literal
 from pydantic import BaseModel, Field
-from enum import Enum
 import uuid
-from .usuario import UsuarioBase, UsuarioCreate, UsuarioUpdate, Rol, UsuarioEstado
-
-class MaquinaTipo(str, Enum):
-    MERROW = "merrow"
-    COVER = "cover"
-    PLANA = "plana"
-    CORTE = "corte"
-    PLANCHA_DTF = "plancha_dtf"
-
-class HabilidadMaquinaria(BaseModel):
-    maquina: MaquinaTipo
-    nivel_eficiencia: int = Field(default=0, ge=0, le=100)
+from .usuario import UsuarioBase, UsuarioCreate, UsuarioUpdate, Rol
+from .maquina import MaquinaTipo, HabilidadMaquinaria
 
 class OperarioBase(UsuarioBase):
     maquinaActual: MaquinaTipo
@@ -27,6 +16,8 @@ class OperarioCreate(OperarioBase, UsuarioCreate):
     )
 class Operario(OperarioBase):
     id: uuid.UUID
+    piezas_buenas: int = 0
+    piezas_defectuosas: int = 0
     
     class ConfigDict:
         from_attributes = True
