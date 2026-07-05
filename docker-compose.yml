@@ -29,11 +29,11 @@ services:
 
   ml-api:
     build:
-      context: ../ml-memexp-service
+      context: ./ml-memexp-service
     ports:
       - "8080:8000"
     volumes:
-      - ../ml-memexp-service:/app
+      - ./ml-memexp-service:/app
     env_file:
       - ./.env
     depends_on:

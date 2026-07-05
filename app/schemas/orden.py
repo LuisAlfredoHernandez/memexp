@@ -36,6 +36,7 @@ class Talla(str, Enum):
     XL = "XL"
     XXL = "XXL"
     MIXTA = "MIXTA"
+    PREDETERMINADA = "PREDETERMINADA"
 
 class LineaOrden(BaseModel):
     producto_tipo: str | None = None
