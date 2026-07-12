@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     DATABASE_URL: str
     ECHO_SQL: bool = False
+    MODEL_PATH: str = "app/services/ml_engine/models/random_forest_v1.pkl"
+
 
     # JWT Settings - Es crucial que SECRET_KEY se gestione de forma segura y no esté hardcodeada.
     # Idealmente, cárgala desde el archivo .env

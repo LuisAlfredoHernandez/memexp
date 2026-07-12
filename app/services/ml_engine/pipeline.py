@@ -3,11 +3,12 @@ import joblib
 import pandas as pd
 import numpy as np
 from sqlalchemy import text
+from sqlmodel import Session
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from core.config import settings
-from core.database import SessionLocal
+from app.core.config import settings
+from app.db.session import engine
 
 def train_model():
     """
@@ -16,10 +17,8 @@ def train_model():
     - RF19 (Reentrenamiento manual)
     - RF20 / RNF-09 (Validar suficiencia de datos de al menos 15 días)
     - RF21 / RNF-10 (Comparar MAE/MSE y bloquear publicación si hay degradación)
-    - RNF-03 (Acceso a BD de forma segura de solo lectura)
     """
-    db = SessionLocal()
-    try:
+    with Session(engine) as db:
         # 1. RNF-09: Validar que existan al menos 15 días de registros de producción en la BD
         dias_query = text("""
             SELECT COUNT(DISTINCT DATE(fecha_reporte)) 
@@ -34,7 +33,7 @@ def train_model():
                 f"en al menos 15 días únicos para entrenar (actualmente hay {unique_days} días)."
             )
 
-        # 2. RNF-03 / RF5: Consultar histórico de producción (Solo Lectura)
+        # 2. Consultar histórico de producción (Solo Lectura)
         query = text("""
             SELECT 
                 ao.piezas_requeridas AS cantidad_piezas,
@@ -112,6 +111,3 @@ def train_model():
             "mse_nuevo": new_mse,
             "version_publicada": "random_forest_v1"
         }
-        
-    finally:
-        db.close()
