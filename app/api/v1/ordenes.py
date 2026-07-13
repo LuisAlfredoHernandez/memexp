@@ -137,6 +137,14 @@ def actualizar_orden(
     update_data = orden.model_dump(exclude_unset=True)
 
     if "lineas" in update_data:
+        # 1. Devolver el stock de los insumos anteriores al inventario
+        for linea in db_orden.lineas:
+            for link in linea.insumo_links:
+                db_insumo = db.get(InsumoDB, link.insumo_id)
+                if db_insumo:
+                    db_insumo.stock += link.cantidad_requerida
+                    db.add(db_insumo)
+
         # Estrategia de reemplazo: eliminar líneas antiguas y crear nuevas.
         # Se requiere cascade delete en la BD para que esto sea eficiente.
         for linea in db_orden.lineas:
@@ -157,7 +165,35 @@ def actualizar_orden(
             
             db_linea = LineaOrdenDB(**linea_item, orden=db_orden)
             for insumo_item in insumos_data:
-                _ = LineaOrdenInsumoLink(**insumo_item, linea_orden=db_linea)
+                db_insumo = db.get(InsumoDB, insumo_item["insumo_id"])
+                if not db_insumo:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Insumo con ID {insumo_item['insumo_id']} no encontrado"
+                    )
+
+                if insumo_item["unidad"] != db_insumo.unidad:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"La unidad del insumo no coincide con la unidad de la orden"
+                    )
+                
+                # Validar stock suficiente
+                if insumo_item["cantidad_requerida"] > db_insumo.stock:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"No hay stock suficiente para la orden"
+                    )
+                
+                db_insumo.stock -= insumo_item["cantidad_requerida"]
+                db.add(db_insumo)
+
+                _ = LineaOrdenInsumoLink(
+                    linea_orden=db_linea,
+                    insumo_id=insumo_item["insumo_id"],
+                    cantidad_requerida=insumo_item["cantidad_requerida"],
+                    unidad=insumo_item["unidad"]
+                )
 
     for key, value in update_data.items():
         setattr(db_orden, key, value)
@@ -193,6 +229,14 @@ def eliminar_orden(
             detail=f"No es posible eliminar una orden en estado '{db_orden.estado.value}'. Las órdenes activas o completadas forman parte del historial operativo y de calibración de la IA."
         )
         
+    # Devolver el stock de los insumos asignados antes de eliminar
+    for linea in db_orden.lineas:
+        for link in linea.insumo_links:
+            db_insumo = db.get(InsumoDB, link.insumo_id)
+            if db_insumo:
+                db_insumo.stock += link.cantidad_requerida
+                db.add(db_insumo)
+
     db.delete(db_orden)
     db.commit()
     if background_tasks:
