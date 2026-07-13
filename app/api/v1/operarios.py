@@ -4,6 +4,7 @@ from app.schemas.operario import Operario as OperarioSchema, OperarioCreate, Ope
 from app.schemas.usuario import UsuarioCreate, UsuarioUpdate
 from app.db.operario_model import Operario
 from app.db.usuario_model import Usuario
+from app.db.asignacion_model import AsignacionOrden
 from app.db.session import get_session
 from app.core.security import hash_password
 from app.api.deps import get_current_active_user
@@ -112,6 +113,16 @@ def eliminar_operario(
     db_operario = db.get(Operario, id)
     if not db_operario:
         raise HTTPException(status_code=404, detail="Operario no encontrado")
+        
+    tiene_asignaciones = db.exec(
+        select(AsignacionOrden).where(AsignacionOrden.operario_id == id)
+    ).first() is not None
+
+    if tiene_asignaciones:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No es posible eliminar físicamente al operario porque cuenta con asignaciones o reportes de trabajo históricos. Por favor, cambie su estado a 'inactivo' en lugar de borrarlo."
+        )
     
     db.delete(db_operario)
     db.delete(db_operario.usuario) # La relación debe estar cargada

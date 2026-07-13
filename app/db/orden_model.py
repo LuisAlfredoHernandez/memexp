@@ -22,5 +22,5 @@ class Orden(SQLModel, table=True):
     cola: Optional[int] = None
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    lineas: List["LineaOrden"] = Relationship(back_populates="orden")
+    lineas: List["LineaOrden"] = Relationship(back_populates="orden", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     asignaciones: List["AsignacionOrden"] = Relationship(back_populates="orden", sa_relationship_kwargs={"cascade": "all, delete-orphan"})

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlmodel import Session, select
 from app.schemas.insumo import Insumo as InsumoSchema, InsumoCreate, InsumoUpdate
 from app.db.insumo_model import Insumo
+from app.db.linea_orden_insumo_link import LineaOrdenInsumoLink
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
 import uuid
@@ -51,6 +52,17 @@ def eliminar_insumo(id: uuid.UUID, db: Session = Depends(get_session)):
     insumo = db.get(Insumo, id)
     if not insumo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Insumo no encontrado")
+        
+    tiene_enlaces = db.exec(
+        select(LineaOrdenInsumoLink).where(LineaOrdenInsumoLink.insumo_id == id)
+    ).first() is not None
+
+    if tiene_enlaces:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No es posible eliminar el insumo porque está asociado a líneas de orden existentes. Por favor, modifique su stock a 0 o márquelo como inhabilitado para futuras órdenes."
+        )
+        
     db.delete(insumo)
     db.commit()
     return

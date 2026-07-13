@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from sqlmodel import Session, select, func
-from app.schemas.orden import Orden as OrdenSchema, OrdenCreate, OrdenUpdate
+from app.schemas.orden import Orden as OrdenSchema, OrdenCreate, OrdenUpdate, EstadoOrden
 from app.db.orden_model import Orden as OrdenDB
 from app.db.linea_orden_model import LineaOrden as LineaOrdenDB
 from app.db.linea_orden_insumo_link import LineaOrdenInsumoLink
@@ -186,6 +186,13 @@ def eliminar_orden(
     db_orden = db.get(OrdenDB, id)
     if not db_orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
+    
+    if db_orden.estado in [EstadoOrden.EN_PROCESO, EstadoOrden.COMPLETADA]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No es posible eliminar una orden en estado '{db_orden.estado.value}'. Las órdenes activas o completadas forman parte del historial operativo y de calibración de la IA."
+        )
+        
     db.delete(db_orden)
     db.commit()
     if background_tasks:
