@@ -10,43 +10,71 @@ from app.db.session import engine
 class DeliveryTimePredictor:
     def __init__(self):
         self.model = None
+        self.features = []
         self._load_model()
 
     def _load_model(self):
         """Carga el modelo en memoria al iniciar el servidor."""
+        self.metrics = {}
         try:
             if os.path.exists(settings.MODEL_PATH):
-                self.model = joblib.load(settings.MODEL_PATH)
+                payload = joblib.load(settings.MODEL_PATH)
+                if isinstance(payload, dict) and "model" in payload:
+                    self.model = payload["model"]
+                    self.features = payload.get("features", [])
+                    self.metrics = payload.get("metrics", {})
+                else:
+                    self.model = payload
+                    self.features = ["cantidad_piezas", "prioridad_alta", "lineas_produccion"]
+                    self.metrics = {}
                 print(f"✅ Modelo cargado correctamente desde: {settings.MODEL_PATH}")
             else:
-                print(f"⚠️ Advertencia: No existe el modelo en {settings.MODEL_PATH}. Usando fallback matemático.")
+                print(f"⚠️ Advertencia: No existe el modelo en {settings.MODEL_PATH}. No se podrán realizar predicciones.")
         except Exception as e:
-            print(f"❌ Error al cargar el modelo: {e}. Usando fallback matemático.")
+            print(f"❌ Error al cargar el modelo: {e}. No se podrán realizar predicciones.")
 
-    def predict(self, cantidad_piezas: int, prioridad_alta: bool, lineas_produccion: int) -> tuple[float, float]:
-        """Predice el tiempo de entrega en horas (RF12)"""
+    def predict(self, cantidad_piezas: int, prioridad_alta: bool, lineas_produccion: int, tipo_prenda: str) -> tuple[float | None, float | None, bool]:
+        """Predice el tiempo de entrega en horas (RF12). Retorna (estimación, margen_error, prenda_nueva)."""
         if self.model is None:
-            # Fallback matemático realista
-            factor = 0.35 if prioridad_alta else 0.45
-            estimacion = (cantidad_piezas * factor) / lineas_produccion
-            estimacion = max(1.0, estimacion)
-            return float(round(estimacion, 2)), float(round(estimacion * 0.08, 2))
-
+            raise ValueError("El modelo de predicción no está calibrado. Por favor, suba el historial de producción (Excel) en la pestaña de Gestión para calibrar la IA.")
+        
+        tipo_prenda_clean = str(tipo_prenda).strip().lower()
+        prenda_nueva = False
+        
+        # Formato de la columna one-hot para tipo_prenda
+        target_col = f"tipo_prenda_{tipo_prenda_clean}"
+        
+        # Si el tipo de prenda nunca fue entrenado, se marca como prenda_nueva
+        if target_col not in self.features:
+            prenda_nueva = True
+            
+        if prenda_nueva:
+            return None, None, True
+            
         try:
-            df_entrada = pd.DataFrame([{
+            input_dict = {
                 "cantidad_piezas": cantidad_piezas,
                 "prioridad_alta": 1 if prioridad_alta else 0,
                 "lineas_produccion": lineas_produccion
-            }])
+            }
+            
+            for col in self.features:
+                if col not in input_dict:
+                    if col == target_col:
+                        input_dict[col] = 1
+                    else:
+                        input_dict[col] = 0
+                        
+            # Asegurar orden exacto de columnas del entrenamiento
+            df_entrada = pd.DataFrame([input_dict], columns=self.features)
+            
             estimacion = self.model.predict(df_entrada)[0]
+            estimacion = max(0.5, estimacion) # Limitar a un mínimo razonable de media hora
+            
             margen_error = estimacion * 0.08
-            return float(round(estimacion, 2)), float(round(margen_error, 2))
+            return float(round(estimacion, 2)), float(round(margen_error, 2)), prenda_nueva
         except Exception as e:
-            print(f"Error en predicción del modelo: {e}")
-            # Fallback en caso de error de forma
-            factor = 0.45
-            estimacion = (cantidad_piezas * factor) / lineas_produccion
-            return float(round(estimacion, 2)), 2.0
+            raise ValueError(f"Fallo al ejecutar la predicción en el modelo: {e}")
 
     def get_projections(self) -> list[dict]:
         """Genera proyecciones de nivel de producción diaria (RF13)"""

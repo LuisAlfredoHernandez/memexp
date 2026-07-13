@@ -9,6 +9,7 @@ from app.db.session import get_session
 from app.api.deps import get_current_active_user
 from app.db.usuario_model import Usuario
 from app.core.websocket import manager
+from app.db.prenda_model import Prenda
 import uuid
 import re
 
@@ -18,6 +19,11 @@ router = APIRouter(prefix="/ordenes", tags=["Producción - Órdenes"], dependenc
 def listar_ordenes(db: Session = Depends(get_session)):
     ordenes = db.exec(select(OrdenDB)).all()
     return ordenes
+
+@router.get("/prendas", response_model=list[str])
+def listar_prendas(db: Session = Depends(get_session)):
+    prendas = db.exec(select(Prenda.nombre)).all()
+    return prendas
 
 @router.post("/", response_model=OrdenSchema, status_code=status.HTTP_201_CREATED)
 def crear_orden(
@@ -52,6 +58,16 @@ def crear_orden(
     # Crea los objetos anidados en memoria. SQLModel los asociará.
     for linea_item in lineas_data:
         insumos_data = linea_item.pop("insumos")
+        
+        # Registrar prenda si no existe en la BD
+        prenda_name = linea_item.get("descripcion", "").strip()
+        if prenda_name:
+            existente = db.exec(select(Prenda).where(func.lower(Prenda.nombre) == func.lower(prenda_name))).first()
+            if not existente:
+                nueva_prenda = Prenda(nombre=prenda_name)
+                db.add(nueva_prenda)
+                db.commit()
+        
         db_linea = LineaOrdenDB(**linea_item, orden=db_orden)
         for insumo_item in insumos_data:
             # Obtener el insumo e ir restando el stock correspondiente
@@ -129,6 +145,16 @@ def actualizar_orden(
         lineas_data = update_data.pop("lineas")
         for linea_item in lineas_data:
             insumos_data = linea_item.pop("insumos")
+            
+            # Registrar prenda si no existe en la BD
+            prenda_name = linea_item.get("descripcion", "").strip()
+            if prenda_name:
+                existente = db.exec(select(Prenda).where(func.lower(Prenda.nombre) == func.lower(prenda_name))).first()
+                if not existente:
+                    nueva_prenda = Prenda(nombre=prenda_name)
+                    db.add(nueva_prenda)
+                    db.commit()
+            
             db_linea = LineaOrdenDB(**linea_item, orden=db_orden)
             for insumo_item in insumos_data:
                 _ = LineaOrdenInsumoLink(**insumo_item, linea_orden=db_linea)

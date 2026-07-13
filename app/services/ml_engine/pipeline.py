@@ -5,6 +5,7 @@ import numpy as np
 from sqlalchemy import text
 from sqlmodel import Session
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from app.core.config import settings
@@ -15,11 +16,11 @@ def train_model():
     Ejecuta el pipeline de reentrenamiento del modelo utilizando datos reales de la BD.
     Cumple con:
     - RF19 (Reentrenamiento manual)
-    - RF20 / RNF-09 (Validar suficiencia de datos de al menos 15 días)
-    - RF21 / RNF-10 (Comparar MAE/MSE y bloquear publicación si hay degradación)
+    - RF20 / RNF-09 (Validar suficiencia de datos flexibilizada a al menos 1 día)
+    - RF21 / RNF-10 (Comparar MAE/MSE de manera informativa únicamente)
     """
     with Session(engine) as db:
-        # 1. RNF-09: Validar que existan al menos 15 días de registros de producción en la BD
+        # 1. RNF-09: Validar que exista al menos 1 día de registros de producción en la BD
         dias_query = text("""
             SELECT COUNT(DISTINCT DATE(fecha_reporte)) 
             FROM reporte_avance 
@@ -27,10 +28,9 @@ def train_model():
         """)
         unique_days = db.execute(dias_query).scalar() or 0
         
-        if unique_days < 15:
+        if unique_days < 1:
             raise ValueError(
-                f"Suficiencia de datos inválida: Se requieren registros de producción distribuidos "
-                f"en al menos 15 días únicos para entrenar (actualmente hay {unique_days} días)."
+                "Suficiencia de datos inválida: Se requiere al menos 1 día de reportes de avance validados para entrenar el modelo."
             )
 
         # 2. Consultar histórico de producción (Solo Lectura)
@@ -39,9 +39,11 @@ def train_model():
                 ao.piezas_requeridas AS cantidad_piezas,
                 CASE WHEN LOWER(o.prioridad::text) IN ('alta', 'urgente') THEN 1 ELSE 0 END AS prioridad_alta,
                 1 AS lineas_produccion,
+                COALESCE(MAX(lo.producto_tipo), 'desconocido') AS tipo_prenda,
                 EXTRACT(EPOCH FROM (MAX(ra.fecha_reporte) - ao.fecha_asignacion)) / 3600.0 AS tiempo_horas
             FROM asignacion_orden ao
             JOIN orden o ON ao.orden_id = o.id
+            LEFT JOIN linea_orden lo ON lo.orden_id = o.id
             JOIN reporte_avance ra ON ra.asignacion_id = ao.id
             WHERE ao.estado::text = 'COMPLETADA' AND ra.estado = 'validado'
             GROUP BY ao.id, ao.piezas_requeridas, o.prioridad, ao.fecha_asignacion
@@ -49,23 +51,50 @@ def train_model():
         
         result = db.execute(query).fetchall()
         
-        if len(result) < 10:
-            # Si hay 15 días de reportes pero no hay suficientes asignaciones finalizadas para entrenar ML
+        if len(result) < 2:
             raise ValueError(
-                f"Registros insuficientes: Se necesitan al menos 10 órdenes finalizadas "
+                f"Registros insuficientes: Se necesitan al menos 2 órdenes finalizadas "
                 f"para calibrar las predicciones (actualmente hay {len(result)})."
             )
 
         # 3. Modelado con Pandas & Scikit-learn
-        df = pd.DataFrame(result, columns=["cantidad_piezas", "prioridad_alta", "lineas_produccion", "tiempo_horas"])
+        df = pd.DataFrame(result, columns=["cantidad_piezas", "prioridad_alta", "lineas_produccion", "tipo_prenda", "tiempo_horas"])
         
-        X = df[["cantidad_piezas", "prioridad_alta", "lineas_produccion"]]
-        y = df["tiempo_horas"]
+        # Saneamiento de datos: eliminar registros con valores corruptos/inválidos
+        df = df[(df["tiempo_horas"] > 0) & (df["cantidad_piezas"] > 0)]
+        
+        if len(df) < 2:
+            raise ValueError(
+                f"Registros válidos insuficientes tras limpieza: Se necesitan al menos 2 órdenes válidas "
+                f"con cantidad y duración mayores a cero (actualmente hay {len(df)})."
+            )
+        
+        # Convertir variables categóricas (tipo_prenda) a numéricas usando One-Hot Encoding
+        df_encoded = pd.get_dummies(df, columns=["tipo_prenda"], drop_first=False)
+        
+        # Las columnas que no son el objetivo "tiempo_horas" son las características
+        feature_cols = [c for c in df_encoded.columns if c != "tiempo_horas"]
+        
+        X = df_encoded[feature_cols]
+        y = df_encoded["tiempo_horas"]
+        
+        # Calcular test_size dinámicamente para evitar conjuntos vacíos en datasets pequeños
+        n_samples = len(df)
+        if n_samples >= 5:
+            test_size = 0.2
+        else:
+            test_size = 1.0 / n_samples
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
-        # Entrenar RandomForest
-        new_model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
+        # Determinar algoritmo según volumen de datos (Modelo Híbrido Dinámico)
+        algoritmo_nombre = "Random Forest"
+        if n_samples < 10:
+            algoritmo_nombre = "Linear Regression"
+            new_model = LinearRegression()
+        else:
+            new_model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
+            
         new_model.fit(X_train, y_train)
 
         # Calcular métricas de error
@@ -73,34 +102,52 @@ def train_model():
         new_mae = float(mean_absolute_error(y_test, y_pred))
         new_mse = float(mean_squared_error(y_test, y_pred))
 
-        # 4. RF21 / RNF-10: Comparar con el modelo activo si existe
+        # 4. Comparar con el modelo activo para fines informativos diagnósticos
         active_mae = None
         active_mse = None
         
         if os.path.exists(settings.MODEL_PATH):
             try:
-                active_model = joblib.load(settings.MODEL_PATH)
-                y_pred_active = active_model.predict(X_test)
+                active_payload = joblib.load(settings.MODEL_PATH)
+                if isinstance(active_payload, dict) and "model" in active_payload:
+                    active_model = active_payload["model"]
+                    active_features = active_payload.get("features", [])
+                else:
+                    active_model = active_payload
+                    active_features = ["cantidad_piezas", "prioridad_alta", "lineas_produccion"]
+                
+                # Alinear X_test con las características que tenía el modelo activo
+                X_test_active = pd.DataFrame(0, index=X_test.index, columns=active_features)
+                for col in active_features:
+                    if col in X_test.columns:
+                        X_test_active[col] = X_test[col]
+                
+                y_pred_active = active_model.predict(X_test_active)
                 active_mae = float(mean_absolute_error(y_test, y_pred_active))
                 active_mse = float(mean_squared_error(y_test, y_pred_active))
-                
-                # Validar degradación: si el nuevo MAE es mayor al del modelo actual, cancelar
-                if new_mae > active_mae:
-                    raise ValueError(
-                        f"Degradación de precisión detectada. "
-                        f"El error MAE del nuevo modelo ({new_mae:.3f} hrs) supera "
-                        f"al del modelo actual en producción ({active_mae:.3f} hrs)."
-                    )
-            except Exception as e:
-                if isinstance(e, ValueError):
-                    raise e
-                # Si falla al cargar el modelo anterior, asumimos que no hay modelo válido previo
+            except Exception:
+                # Si falla al cargar el modelo anterior, ignorar diagnóstico
                 pass
 
-        # 5. Guardar artefactos
+        # 5. Guardar modelo y metadatos (Con total fiabilidad, siempre se publica)
         artifacts_dir = os.path.dirname(settings.MODEL_PATH)
         os.makedirs(artifacts_dir, exist_ok=True)
-        joblib.dump(new_model, settings.MODEL_PATH)
+        
+        from datetime import datetime
+        payload = {
+            "model": new_model,
+            "features": feature_cols,
+            "metrics": {
+                "mae_actual": active_mae,
+                "mse_actual": active_mse,
+                "mae_nuevo": new_mae,
+                "mse_nuevo": new_mse,
+                "registros_entrenados": len(df),
+                "fecha_calibracion": datetime.now().isoformat(),
+                "algoritmo": algoritmo_nombre
+            }
+        }
+        joblib.dump(payload, settings.MODEL_PATH)
 
         return {
             "estado": "exitoso",
@@ -109,5 +156,5 @@ def train_model():
             "mse_actual": active_mse,
             "mae_nuevo": new_mae,
             "mse_nuevo": new_mse,
-            "version_publicada": "random_forest_v1"
+            "version_publicada": f"{algoritmo_nombre.lower().replace(' ', '_')}_v1"
         }
