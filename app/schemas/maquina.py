@@ -17,6 +17,7 @@ class HabilidadMaquinaria(BaseModel):
 
 class MaquinaEstado(str, Enum):
     OPERATIVA = "operativa"
+    BAJO_REVISION = "bajo_revision"
     MANTENIMIENTO = "mantenimiento"
     FUERA_SERVICIO = "fuera_servicio"
 

@@ -3,6 +3,15 @@ import json
 from sqlmodel import Session
 from app.db.operario_model import Operario
 
+def clean_maquina_tipo(val) -> str:
+    """Sanea el tipo de máquina eliminando prefijos de Enum como 'maquinatipo.merrow' -> 'merrow'."""
+    if hasattr(val, "value"):
+        val = val.value
+    s = str(val).strip().lower()
+    if "." in s:
+        s = s.split(".")[-1]
+    return s
+
 def calcular_eficiencia_sesion(piezas_buenas: int, horas_trabajadas: float, capacidad_por_hora: float) -> int:
     """
     Calcula el porcentaje de eficiencia para una sesión o turno específico.
@@ -33,7 +42,7 @@ def actualizar_eficiencia_operario(
     if not db_operario:
         return
 
-    maquina_tipo_clean = str(maquina_tipo).strip().lower()
+    maquina_tipo_clean = clean_maquina_tipo(maquina_tipo)
 
     # Cargar lista actual de habilidades
     habilidades = db_operario.habilidades or []
@@ -43,20 +52,25 @@ def actualizar_eficiencia_operario(
         except Exception:
             habilidades = []
 
-    # Convertir elementos de Pydantic a dict si fuera necesario
+    # Convertir elementos y sanear tipos de máquina
     habilidades_list = []
     for item in habilidades:
         if isinstance(item, dict):
-            habilidades_list.append(dict(item))
+            h_dict = dict(item)
         elif hasattr(item, "model_dump"):
-            habilidades_list.append(item.model_dump())
+            h_dict = item.model_dump()
         elif hasattr(item, "dict"):
-            habilidades_list.append(item.dict())
+            h_dict = item.dict()
+        else:
+            continue
+        
+        h_dict["maquina"] = clean_maquina_tipo(h_dict.get("maquina", ""))
+        habilidades_list.append(h_dict)
 
     # Buscar la habilidad correspondiente a esta máquina
     habilidad_existente = None
     for h in habilidades_list:
-        if str(h.get("maquina", "")).strip().lower() == maquina_tipo_clean:
+        if h.get("maquina") == maquina_tipo_clean:
             habilidad_existente = h
             break
 
