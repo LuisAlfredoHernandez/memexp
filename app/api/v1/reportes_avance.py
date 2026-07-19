@@ -8,10 +8,12 @@ from app.db.usuario_model import Usuario
 from app.db.operario_model import Operario
 from app.db.asignacion_model import AsignacionOrden
 from app.db.reporte_avance_model import ReporteAvance
+from app.db.maquina_model import Maquina
 from app.schemas.reporte_avance import ReporteAvanceCreate, ReporteAvanceResponse, ReporteAvanceValidar
 from app.schemas.usuario import Rol
 from app.api.deps import get_current_active_user
 from app.core.websocket import manager
+from app.services.eficiencia_service import calcular_eficiencia_sesion, actualizar_eficiencia_operario
 
 router = APIRouter(prefix="/reportes-avance", tags=["Planta - Reportes de Avance"], dependencies=[Depends(get_current_active_user)])
 
@@ -159,6 +161,25 @@ def validar_reporte_avance(
                 db_asignacion.estado = "en_proceso"
                 
             db.add(db_asignacion)
+
+        # Recalcular eficiencia dinámica del operario para la máquina utilizada
+        maquina_val = db_reporte.maquina_id
+        if not maquina_val and db_reporte.operario:
+            maquina_val = db_reporte.operario.maquinaActual
+
+        if maquina_val:
+            maq_obj = db.exec(select(Maquina).where((Maquina.codigo == maquina_val) | (Maquina.tipo == maquina_val))).first()
+            capacidad_hora = float(maq_obj.capacidad_por_hora) if maq_obj and maq_obj.capacidad_por_hora > 0 else 10.0
+            maq_tipo = str(maq_obj.tipo if maq_obj else maquina_val.split("-")[0]).lower()
+
+            horas_trabajadas = 1.0
+            if db_asignacion and db_asignacion.fecha_asignacion and db_reporte.fecha_reporte:
+                diff_sec = (db_reporte.fecha_reporte - db_asignacion.fecha_asignacion).total_seconds()
+                if diff_sec > 0:
+                    horas_trabajadas = max(0.1, min(24.0, diff_sec / 3600.0))
+
+            eficiencia_sesion = calcular_eficiencia_sesion(payload.piezas_buenas, horas_trabajadas, capacidad_hora)
+            actualizar_eficiencia_operario(db, db_reporte.operario_id, maq_tipo, eficiencia_sesion)
             
     db.add(db_reporte)
     db.commit()

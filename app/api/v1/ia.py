@@ -25,6 +25,7 @@ from app.schemas.predict import (
 # Importar servicios
 from app.services.ml_engine.predictor import predictor
 from app.services.ml_engine.pipeline import train_model
+from app.services.eficiencia_service import calcular_eficiencia_sesion, actualizar_eficiencia_operario
 
 router = APIRouter(prefix="/ia", tags=["IA Predictiva"])
 
@@ -300,7 +301,24 @@ async def subir_datos_entrenamiento(
                 except Exception:
                     fecha_val = datetime.now()
                     
-                # 1. Asegurar la existencia del Operario
+                # 1. Asegurar existencia de la Máquina primero para obtener capacidad_por_hora
+                maq_tipo = maquina_cod.split("-")[0].lower()
+                maq_row = db.execute(text("SELECT id, capacidad_por_hora FROM maquina WHERE codigo = :cod LIMIT 1"), {"cod": maquina_cod}).fetchone()
+                if not maq_row:
+                    maq_id = uuid.uuid4()
+                    capacidad_hora = 10.0
+                    db.execute(text("""
+                        INSERT INTO maquina (id, codigo, tipo, nombre, estado, capacidad_por_hora)
+                        VALUES (:mid, :cod, :tipo, :nombre, 'operativa', :cap)
+                    """), {"mid": maq_id, "cod": maquina_cod, "tipo": maq_tipo, "nombre": f"Máquina {maquina_cod}", "cap": capacidad_hora})
+                else:
+                    maq_id, capacidad_hora = maq_row
+                    capacidad_hora = float(capacidad_hora or 10.0)
+
+                # 2. Calcular la eficiencia real de este registro del Excel
+                eficiencia_calc = calcular_eficiencia_sesion(piezas_buenas, horas, capacidad_hora)
+
+                # 3. Asegurar la existencia del Operario
                 partes = operario_full.split(" ", 1)
                 nombre_op = partes[0]
                 apellido_op = partes[1] if len(partes) > 1 else ""
@@ -325,18 +343,11 @@ async def subir_datos_entrenamiento(
                     """), {
                         "opid": op_id, 
                         "maq": maquina_cod, 
-                        "habs": f'[{"maquina": "{maquina_cod.lower().split("-")[0]}", "nivel_eficiencia": 90}]'
+                        "habs": f'[{"maquina": "{maq_tipo}", "nivel_eficiencia": {eficiencia_calc}}]'
                     })
-                
-                # 2. Asegurar existencia de la Máquina
-                maq_id = db.execute(text("SELECT id FROM maquina WHERE codigo = :cod LIMIT 1"), {"cod": maquina_cod}).scalar()
-                if not maq_id:
-                    maq_id = uuid.uuid4()
-                    maq_tipo = maquina_cod.split("-")[0].lower()
-                    db.execute(text("""
-                        INSERT INTO maquina (id, codigo, tipo, nombre, estado, capacidad_por_hora)
-                        VALUES (:mid, :cod, :tipo, :nombre, 'operativa', 10.0)
-                    """), {"mid": maq_id, "cod": maquina_cod, "tipo": maq_tipo, "nombre": f"Máquina {maquina_cod}"})
+                else:
+                    # Si el operario ya existía, actualizar dinámicamente su eficiencia con este nuevo registro
+                    actualizar_eficiencia_operario(db, op_id, maq_tipo, eficiencia_calc)
                 
                 # 3. Limpiar registros previos con el mismo número de orden para evitar duplicados
                 db.execute(text("""

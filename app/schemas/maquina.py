@@ -8,6 +8,8 @@ class MaquinaTipo(str, Enum):
     PLANA = "plana"
     CORTE = "corte"
     PLANCHA_DTF = "plancha_dtf"
+    PESO = "peso"
+    OTRO = "otro"
 
 class HabilidadMaquinaria(BaseModel):
     maquina: MaquinaTipo
