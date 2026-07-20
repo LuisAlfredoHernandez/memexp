@@ -17,13 +17,13 @@ class Operario(SQLModel, table=True):
         primary_key=True,
         index=True
     )
-    maquinaActual: MaquinaTipo
+    maquina_actual_id: Optional[uuid.UUID] = Field(default=None, foreign_key="maquina.id")
     habilidades: list[HabilidadMaquinaria] = Field(default=[], sa_column=Column(JSON))
     
     orden_actual_id: Optional[uuid.UUID] = Field(default=None, foreign_key="orden.id")
 
     usuario: "Usuario" = Relationship(back_populates="operario")
-    maquinas: List["Maquina"] = Relationship(back_populates="operario")
+    maquinas: List["Maquina"] = Relationship(back_populates="operario", sa_relationship_kwargs={"foreign_keys": "Maquina.operario_asignado_id"})
     asignaciones: List["AsignacionOrden"] = Relationship(back_populates="operario", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     reportes_avance: List["ReporteAvance"] = Relationship(back_populates="operario", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 

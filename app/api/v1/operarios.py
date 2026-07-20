@@ -78,7 +78,7 @@ def actualizar_operario(
     update_data = operario.model_dump(exclude_unset=True)
 
     # 1. Actualizar campos específicos del modelo Operario
-    operario_specific_fields = ['habilidades', 'maquinaActual', 'orden_actual_id']
+    operario_specific_fields = ['habilidades', 'maquina_actual_id', 'orden_actual_id']
     for field in operario_specific_fields:
         if field in update_data:
             setattr(db_operario, field, update_data[field])

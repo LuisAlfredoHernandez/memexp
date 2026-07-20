@@ -17,4 +17,4 @@ class Maquina(SQLModel, table=True):
     estado: MaquinaEstado
     
     operario_asignado_id: Optional[uuid.UUID] = Field(default=None, foreign_key="operario.id")
-    operario: Optional["Operario"] = Relationship(back_populates="maquinas")
+    operario: Optional["Operario"] = Relationship(back_populates="maquinas", sa_relationship_kwargs={"foreign_keys": "Maquina.operario_asignado_id"})
