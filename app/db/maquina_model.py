@@ -13,6 +13,7 @@ class Maquina(SQLModel, table=True):
     nombre: str
     descripcion: Optional[str] = None
     modelo: Optional[str] = None
+    serie: Optional[str] = None
     capacidad_por_hora: float
     estado: MaquinaEstado
     
