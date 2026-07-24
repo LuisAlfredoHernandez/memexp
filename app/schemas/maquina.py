@@ -14,6 +14,7 @@ class MaquinaTipo(str, Enum):
 class HabilidadMaquinaria(BaseModel):
     maquina: MaquinaTipo
     nivel_eficiencia: int = Field(default=0, ge=0, le=100)
+    sesiones: int = Field(default=1, ge=1)
 
 class MaquinaEstado(str, Enum):
     OPERATIVA = "operativa"

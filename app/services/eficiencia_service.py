@@ -31,12 +31,13 @@ def actualizar_eficiencia_operario(
     operario_id: uuid.UUID,
     maquina_tipo: str,
     eficiencia_sesion: float,
-    alpha: float = 0.20
+    alpha_min: float = 0.10,
+    alpha_max: float = 1.0
 ) -> None:
     """
     Actualiza el nivel de eficiencia de un operario para una máquina usando
-    Media Móvil Ponderada Exponencial (EWMA):
-    Nuevo Nivel = alpha * Eficiencia Sesión + (1 - alpha) * Nivel Previo
+    Media Móvil Ponderada Exponencial (EWMA) con Alpha dinámico.
+    Nuevo Nivel = alpha_efectivo * Eficiencia Sesión + (1 - alpha_efectivo) * Nivel Previo
     """
     db_operario = db.get(Operario, operario_id)
     if not db_operario:
@@ -78,12 +79,23 @@ def actualizar_eficiencia_operario(
 
     if habilidad_existente:
         nivel_previo = habilidad_existente.get("nivel_eficiencia", 0)
-        nuevo_nivel = round((alpha * eficiencia_sesion_int) + ((1.0 - alpha) * nivel_previo))
+        sesiones_historicas = habilidad_existente.get("sesiones", 1)
+        
+        # Incrementar historial de sesiones
+        sesiones_historicas += 1
+        habilidad_existente["sesiones"] = sesiones_historicas
+        
+        # Alpha dinámico basado en historial de sesiones: 2 / (N + 1)
+        alpha_calculado = 2.0 / (sesiones_historicas + 1)
+        alpha_efectivo = max(alpha_min, min(alpha_max, alpha_calculado))
+        
+        nuevo_nivel = round((alpha_efectivo * eficiencia_sesion_int) + ((1.0 - alpha_efectivo) * nivel_previo))
         habilidad_existente["nivel_eficiencia"] = min(100, max(0, int(nuevo_nivel)))
     else:
         habilidades_list.append({
             "maquina": maquina_tipo_clean,
-            "nivel_eficiencia": eficiencia_sesion_int
+            "nivel_eficiencia": eficiencia_sesion_int,
+            "sesiones": 1
         })
 
     db_operario.habilidades = habilidades_list
