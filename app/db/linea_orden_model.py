@@ -20,7 +20,7 @@ class LineaOrden(SQLModel, table=True):
     color: Optional[str] = None
     orden_id: uuid.UUID = Field(foreign_key="orden.id")
     orden: "Orden" = Relationship(back_populates="lineas")
-    insumo_links: List["LineaOrdenInsumoLink"] = Relationship(back_populates="linea_orden")
+    insumo_links: List["LineaOrdenInsumoLink"] = Relationship(back_populates="linea_orden", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     
     @property
     def insumos(self) -> List["InsumoRequerido"]:
