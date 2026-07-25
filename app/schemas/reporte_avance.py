@@ -10,12 +10,14 @@ class ReporteAvanceBase(BaseModel):
     notas: Optional[str] = Field(default=None, description="Notas del operario")
 
 class ReporteAvanceCreate(ReporteAvanceBase):
-    pass
+    fecha_inicio: Optional[datetime] = Field(default=None, description="Si no hay sesión activa, el frontend debe enviar la hora manual.")
 
 class ReporteAvanceValidar(BaseModel):
     piezas_buenas: int = Field(..., ge=0)
     piezas_defectuosas: int = Field(..., ge=0)
     estado: str = Field(default="validado")  # "validado" o "rechazado"
+    fecha_inicio: Optional[datetime] = None
+    fecha_fin: Optional[datetime] = None
 
 class ReporteAvanceResponse(BaseModel):
     id: uuid.UUID
@@ -29,6 +31,8 @@ class ReporteAvanceResponse(BaseModel):
     piezas_defectuosas: int
     estado: str
     fecha_reporte: datetime
+    fecha_inicio: Optional[datetime] = None
+    fecha_fin: Optional[datetime] = None
     notas: Optional[str] = None
 
     class ConfigDict:

@@ -1,6 +1,7 @@
 from sqlmodel import Field, SQLModel, Relationship, JSON, Column
 import uuid
 from typing import List, Optional, TYPE_CHECKING
+from datetime import datetime
 
 from app.schemas.maquina import MaquinaTipo, HabilidadMaquinaria
 
@@ -21,6 +22,7 @@ class Operario(SQLModel, table=True):
     habilidades: list[HabilidadMaquinaria] = Field(default=[], sa_column=Column(JSON))
     
     orden_actual_id: Optional[uuid.UUID] = Field(default=None, foreign_key="orden.id")
+    sesion_activa_desde: Optional[datetime] = Field(default=None, description="Registra la hora exacta cuando el operario inició su tarea actual")
 
     usuario: "Usuario" = Relationship(back_populates="operario")
     maquinas: List["Maquina"] = Relationship(back_populates="operario", sa_relationship_kwargs={"foreign_keys": "Maquina.operario_asignado_id"})

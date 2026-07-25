@@ -21,6 +21,8 @@ class ReporteAvance(SQLModel, table=True):
     estado: str = Field(default="pendiente", description="Estado del reporte (pendiente, validado, rechazado)")
     fecha_reporte: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     fecha_validacion: Optional[datetime] = None
+    fecha_inicio: Optional[datetime] = Field(default=None, description="Fecha de inicio de la sesión")
+    fecha_fin: Optional[datetime] = Field(default=None, description="Fecha de culminación de la sesión")
     
     maquina_id: Optional[str] = Field(default=None, description="Máquina/estación en la que se realizó el avance")
     notas: Optional[str] = Field(default=None, description="Notas aclaratorias del operario")

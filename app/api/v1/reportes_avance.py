@@ -41,6 +41,8 @@ def build_response(reporte: ReporteAvance) -> ReporteAvanceResponse:
         piezas_defectuosas=reporte.piezas_defectuosas,
         estado=reporte.estado,
         fecha_reporte=reporte.fecha_reporte,
+        fecha_inicio=reporte.fecha_inicio,
+        fecha_fin=reporte.fecha_fin,
         notas=reporte.notas
     )
 
@@ -69,16 +71,35 @@ def crear_reporte_avance(
             
     # Si maquina_id no se provee, usar la maquinaActual del operario
     maquina = payload.maquina_id
-    if not maquina:
-        db_operario = db.get(Operario, db_asignacion.operario_id)
-        if db_operario:
+    # Prioridad: 1. Input manual, 2. Sesión activa
+    fecha_inicio = payload.fecha_inicio
+    fecha_fin = datetime.now(timezone.utc)
+    
+    db_operario = db.get(Operario, db_asignacion.operario_id)
+    if db_operario:
+        if not maquina:
             maquina = db_operario.maquinaActual
+            
+        if not fecha_inicio:
+            fecha_inicio = db_operario.sesion_activa_desde
+            
+        # Limpiar la sesión activa en el operario
+        db_operario.sesion_activa_desde = None
+        db.add(db_operario)
+        
+    if not fecha_inicio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe iniciar la sesión primero o enviar manualmente la hora de inicio (fecha_inicio)."
+        )
             
     db_reporte = ReporteAvance(
         asignacion_id=payload.asignacion_id,
         operario_id=db_asignacion.operario_id,
         piezas_reportadas=payload.piezas_reportadas,
         maquina_id=maquina,
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
         notas=payload.notas,
         estado="pendiente"
     )
@@ -146,6 +167,11 @@ def validar_reporte_avance(
     db_reporte.estado = payload.estado
     db_reporte.fecha_validacion = datetime.now(timezone.utc)
     
+    if payload.fecha_inicio is not None:
+        db_reporte.fecha_inicio = payload.fecha_inicio
+    if payload.fecha_fin is not None:
+        db_reporte.fecha_fin = payload.fecha_fin
+    
     # Consolidar avance si es validado
     db_asignacion = db.get(AsignacionOrden, db_reporte.asignacion_id)
     orden_numero = db_asignacion.orden.numero if db_asignacion and db_asignacion.orden else ""
@@ -173,7 +199,11 @@ def validar_reporte_avance(
             maq_tipo = str(maq_obj.tipo if maq_obj else maquina_val.split("-")[0]).lower()
 
             horas_trabajadas = 1.0
-            if db_asignacion and db_asignacion.fecha_asignacion and db_reporte.fecha_reporte:
+            if db_reporte.fecha_inicio and db_reporte.fecha_fin:
+                diff_sec = (db_reporte.fecha_fin - db_reporte.fecha_inicio).total_seconds()
+                if diff_sec > 0:
+                    horas_trabajadas = max(0.1, diff_sec / 3600.0)
+            elif db_asignacion and db_asignacion.fecha_asignacion and db_reporte.fecha_reporte:
                 diff_sec = (db_reporte.fecha_reporte - db_asignacion.fecha_asignacion).total_seconds()
                 if diff_sec > 0:
                     horas_trabajadas = max(0.1, min(24.0, diff_sec / 3600.0))
@@ -193,6 +223,8 @@ def validar_reporte_avance(
             "piezas_reportadas": db_reporte.piezas_reportadas,
             "piezas_buenas": payload.piezas_buenas,
             "piezas_defectuosas": payload.piezas_defectuosas,
-            "orden_numero": orden_numero
+            "orden_numero": orden_numero,
+            "fecha_inicio": db_reporte.fecha_inicio.isoformat() if db_reporte.fecha_inicio else None,
+            "fecha_fin": db_reporte.fecha_fin.isoformat() if db_reporte.fecha_fin else None
         })
     return build_response(db_reporte)

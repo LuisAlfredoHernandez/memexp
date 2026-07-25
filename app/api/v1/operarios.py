@@ -9,6 +9,7 @@ from app.db.session import get_session
 from app.core.security import hash_password
 from app.api.deps import get_current_active_user
 from app.core.websocket import manager
+from datetime import datetime, timezone
 import uuid
 
 router = APIRouter(prefix="/operarios", tags=["Planta - Operarios"], dependencies=[Depends(get_current_active_user)])
@@ -133,3 +134,21 @@ def eliminar_operario(
             "usuario_id": str(current_user.id)
         })
     return
+
+@router.post("/me/iniciar-sesion", response_model=OperarioSchema)
+def iniciar_sesion_trabajo(
+    db: Session = Depends(get_session),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    if current_user.rol != "operario":
+        raise HTTPException(status_code=403, detail="Solo los operarios pueden iniciar sesión de trabajo.")
+        
+    db_operario = current_user.operario
+    if not db_operario:
+        raise HTTPException(status_code=404, detail="Operario no encontrado.")
+        
+    db_operario.sesion_activa_desde = datetime.now(timezone.utc)
+    db.add(db_operario)
+    db.commit()
+    db.refresh(db_operario)
+    return db_operario
