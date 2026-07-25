@@ -29,3 +29,17 @@ def create_access_token(subject: Any, expires_delta: timedelta | None = None) ->
     to_encode = {"exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+def create_refresh_token(subject: Any, expires_delta: timedelta | None = None) -> str:
+    """
+    Crea un nuevo token de refresco JWT con un claim especial para distinguirlo de un access token.
+    """
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
+        )
+    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
