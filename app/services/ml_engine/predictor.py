@@ -78,9 +78,41 @@ class DeliveryTimePredictor:
 
     def get_projections(self) -> list[dict]:
         """Genera proyecciones de nivel de producción diaria (RF13)"""
+        from datetime import datetime
         with Session(engine) as db:
             try:
-                # Consultar los últimos 7 días reales de producción diaria validada
+                # 1. Calcular la meta diaria dinámica (Just In Time)
+                query_pendientes = text("""
+                    SELECT ao.piezas_requeridas, ao.piezas_completadas, o.fecha_entrega_estimada
+                    FROM asignacion_orden ao
+                    JOIN orden o ON ao.orden_id = o.id
+                    WHERE ao.estado IN ('pendiente', 'en_proceso')
+                """)
+                pendientes = db.execute(query_pendientes).fetchall()
+
+                meta_diaria = 0.0
+                hoy = datetime.now().date()
+                for req, comp, fecha_entrega in pendientes:
+                    faltantes = req - comp
+                    if faltantes > 0 and fecha_entrega:
+                        if isinstance(fecha_entrega, str):
+                            from dateutil.parser import parse
+                            try:
+                                fecha_dt = parse(fecha_entrega).date()
+                            except:
+                                fecha_dt = hoy
+                        else:
+                            fecha_dt = fecha_entrega.date() if hasattr(fecha_entrega, 'date') else fecha_entrega
+                            
+                        dias = (fecha_dt - hoy).days
+                        dias = max(1, dias)
+                        meta_diaria += faltantes / dias
+
+                meta_diaria = int(meta_diaria)
+                if meta_diaria == 0:
+                    meta_diaria = 30 # Valor fallback si no hay pendientes
+
+                # 2. Consultar los últimos 7 días reales de producción diaria validada
                 query = text("""
                     SELECT DATE(fecha_reporte) as dia, SUM(piezas_buenas) as total_piezas
                     FROM reporte_avance
@@ -91,20 +123,20 @@ class DeliveryTimePredictor:
                 result = db.execute(query).fetchall()
                 
                 proyecciones = []
-                dia_index = 1
+                meta_acumulada = 0
                 acumulado_real = 0
                 
                 for row in result:
                     fecha_str = row[0].strftime("%d/%m")
                     real_pzs = int(row[1])
                     acumulado_real += real_pzs
+                    meta_acumulada += meta_diaria
                     proyecciones.append({
                         "d": fecha_str,
-                        "meta": dia_index * 30,
+                        "meta": meta_acumulada,
                         "real": acumulado_real,
                         "pred": None
                     })
-                    dia_index += 1
 
                 # Si no hay datos suficientes en base de datos, usamos un mock dinámico realista
                 if len(proyecciones) == 0:
@@ -133,9 +165,10 @@ class DeliveryTimePredictor:
                 proyecciones[-1]["pred"] = acumulado_real # El último día real coincide con el inicio de predicción
                 
                 for i in range(1, 4):
+                    meta_acumulada += meta_diaria
                     proyecciones.append({
                         "d": f"+{i}d",
-                        "meta": (len(proyecciones)) * 30,
+                        "meta": meta_acumulada,
                         "real": None,
                         "pred": int(ultimo_acumulado + (promedio_diario * factor_reduccion * i))
                     })
