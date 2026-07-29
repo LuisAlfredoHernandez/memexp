@@ -259,9 +259,11 @@ class DeliveryTimePredictor:
                 if maquinas_saturadas:
                     for sat_cod, sat_tipo in maquinas_saturadas:
                         query_operarios = text("""
-                            SELECT o.id, o.nombre, o.apellido, o."maquinaActual", o.habilidades
+                            SELECT o.id, u.nombre, u.apellido, m2.codigo as "maquinaActual", o.habilidades
                             FROM operario o
-                            WHERE o."maquinaActual" != :sat_cod
+                            JOIN usuario u ON o.id = u.id
+                            LEFT JOIN maquina m2 ON o.maquina_actual_id = m2.id
+                            WHERE m2.codigo != :sat_cod OR m2.codigo IS NULL
                         """)
                         ops = db.execute(query_operarios, {"sat_cod": sat_cod}).fetchall()
                         
