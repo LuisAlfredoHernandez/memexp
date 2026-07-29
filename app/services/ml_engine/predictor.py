@@ -168,7 +168,7 @@ class DeliveryTimePredictor:
                                SELECT SUM(ao.piezas_requeridas - ao.piezas_completadas)
                                FROM asignacion_orden ao
                                JOIN operario op ON ao.operario_id = op.id
-                               WHERE op."maquinaActual"::text = m.codigo AND ao.estado = 'en_proceso'
+                               WHERE op.maquina_actual_id = m.id AND ao.estado IN ('en_proceso', 'pendiente')
                            ), 0) as carga_pendiente
                     FROM maquina m
                 """)
@@ -180,22 +180,27 @@ class DeliveryTimePredictor:
                 for m in maquinas_db:
                     codigo, tipo, estado, carga = m
                     carga = int(carga)
-                    if estado != "operativa":
+                    if str(estado).lower() != "operativa":
                         saturacion = 0
-                        nivel = "advertencia" if estado == "mantenimiento" else "critica"
+                        nivel = "advertencia" if str(estado).lower() == "mantenimiento" else "critica"
                         msg = f"Máquina {codigo} fuera de servicio ({estado})."
                     else:
-                        saturacion = min(98, max(20, int(carga * 0.2)))
-                        if saturacion > 80:
-                            nivel = "critica"
-                            msg = f"Saturación crítica en {codigo} — cuello de botella en {tipo}."
-                            maquinas_saturadas.append((codigo, tipo))
-                        elif saturacion > 60:
-                            nivel = "advertencia"
-                            msg = f"Carga elevada en {codigo}. Redistribuir operarios."
-                        else:
+                        if carga == 0:
+                            saturacion = 0
                             nivel = "info"
-                            msg = f"Capacidad ociosa en {codigo}. Puede absorber pedidos."
+                            msg = f"Capacidad ociosa en {codigo}. No se está usando actualmente."
+                        else:
+                            saturacion = min(98, max(20, int(carga * 0.2)))
+                            if saturacion > 80:
+                                nivel = "critica"
+                                msg = f"Saturación crítica en {codigo} — cuello de botella en {tipo}."
+                                maquinas_saturadas.append((codigo, tipo))
+                            elif saturacion > 60:
+                                nivel = "advertencia"
+                                msg = f"Carga elevada en {codigo}. Redistribuir operarios."
+                            else:
+                                nivel = "advertencia"
+                                msg = f"En uso ({carga} piezas pendientes)."
                     
                     cuellos.append({
                         "maquina": codigo,

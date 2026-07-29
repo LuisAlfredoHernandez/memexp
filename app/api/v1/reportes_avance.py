@@ -14,6 +14,7 @@ from app.schemas.usuario import Rol
 from app.api.deps import get_current_active_user
 from app.core.websocket import manager
 from app.services.eficiencia_service import calcular_eficiencia_sesion, actualizar_eficiencia_operario
+from app.api.v1.utils_asignaciones import revisar_y_liberar_maquina
 
 router = APIRouter(prefix="/reportes-avance", tags=["Planta - Reportes de Avance"], dependencies=[Depends(get_current_active_user)])
 
@@ -213,6 +214,11 @@ def validar_reporte_avance(
             
     db.add(db_reporte)
     db.commit()
+    
+    if payload.estado == "validado":
+        revisar_y_liberar_maquina(db, db_reporte.operario_id)
+        db.commit()
+        
     db.refresh(db_reporte)
     if background_tasks:
         background_tasks.add_task(manager.broadcast, {

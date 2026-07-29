@@ -9,6 +9,7 @@ from app.db.session import get_session
 from app.api.deps import get_current_active_user
 from app.schemas.usuario import Rol
 from app.core.websocket import manager
+from app.api.v1.utils_asignaciones import revisar_y_liberar_maquina
 import uuid
 
 router = APIRouter(prefix="/asignaciones", tags=["Planta - Asignaciones"], dependencies=[Depends(get_current_active_user)])
@@ -96,6 +97,10 @@ def actualizar_asignacion(
         
     db.add(db_asignacion)
     db.commit()
+    
+    revisar_y_liberar_maquina(db, db_asignacion.operario_id)
+    db.commit()
+    
     db.refresh(db_asignacion)
     if background_tasks:
         background_tasks.add_task(manager.broadcast, {
@@ -123,8 +128,13 @@ def eliminar_asignacion(
     if not db_asignacion:
         raise HTTPException(status_code=404, detail="Asignación no encontrada")
         
+    operario_id = db_asignacion.operario_id
     db.delete(db_asignacion)
     db.commit()
+    
+    revisar_y_liberar_maquina(db, operario_id)
+    db.commit()
+    
     if background_tasks:
         background_tasks.add_task(manager.broadcast, {
             "event": "assignment_updated",
