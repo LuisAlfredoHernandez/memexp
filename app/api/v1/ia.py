@@ -202,6 +202,14 @@ def obtener_cuellos_de_botella(current_user: Usuario = Depends(get_current_activ
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/active-delays")
+def obtener_retrasos_activos(current_user: Usuario = Depends(get_current_active_user)):
+    """Detecta tempranamente retrasos en cola activa usando el oráculo IA (RF14)"""
+    try:
+        return predictor.detect_active_delays()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/simulate-mts", response_model=List[MtsSimulationItem])
 def simular_impacto_mts(
     request: MtsSimulationRequest,

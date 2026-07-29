@@ -313,6 +313,92 @@ class DeliveryTimePredictor:
                     ]
                 }
 
+    def detect_active_delays(self) -> list[dict]:
+        """Detecta tempranamente retrasos en cola activa usando el oráculo IA (RF14)"""
+        from datetime import datetime
+        with Session(engine) as db:
+            try:
+                query = text("""
+                    SELECT 
+                        o.numero,
+                        ao.tarea,
+                        ao.piezas_requeridas,
+                        ao.piezas_completadas,
+                        o.fecha_entrega_estimada,
+                        lo.producto_tipo,
+                        o.prioridad
+                    FROM asignacion_orden ao
+                    JOIN orden o ON ao.orden_id = o.id
+                    LEFT JOIN linea_orden lo ON lo.orden_id = o.id
+                    WHERE ao.estado IN ('pendiente', 'en_proceso')
+                """)
+                active_orders = db.execute(query).fetchall()
+                
+                alertas = []
+                hoy = datetime.now()
+                
+                for row in active_orders:
+                    numero, tarea, req, comp, fecha_entrega, prenda, prioridad = row
+                    faltantes = req - comp
+                    
+                    if faltantes <= 0:
+                        continue
+                        
+                    # 1. Tiempo estimado por la IA
+                    prioridad_alta = str(prioridad).lower() in ["alta", "urgente"]
+                    tiempo_estimado, _, _ = self.predict(
+                        cantidad_piezas=faltantes,
+                        prioridad_alta=prioridad_alta,
+                        lineas_produccion=1,
+                        tipo_prenda=prenda or "desconocido"
+                    )
+                    
+                    if tiempo_estimado is None:
+                        continue
+                        
+                    # 2. Tiempo Real Disponible
+                    if not fecha_entrega:
+                        continue
+                        
+                    if isinstance(fecha_entrega, str):
+                        from dateutil.parser import parse
+                        try:
+                            fecha_dt = parse(fecha_entrega)
+                        except:
+                            fecha_dt = hoy
+                    else:
+                        fecha_dt = fecha_entrega
+                        if not hasattr(fecha_dt, 'hour'):
+                            fecha_dt = datetime.combine(fecha_dt, datetime.min.time())
+                            fecha_dt = fecha_dt.replace(hour=18)
+                            
+                    horas_reales_disp = (fecha_dt - hoy).total_seconds() / 3600.0
+                    
+                    # 3. Regla de Riesgo
+                    riesgo = None
+                    porcentaje_completado = round((comp / float(req)) * 100, 1) if req > 0 else 0
+                    
+                    if horas_reales_disp < 0:
+                        riesgo = "alto"
+                        msg = f"{numero} ({tarea}): {comp} de {req} piezas ({porcentaje_completado}%). ¡Orden vencida! Requiere {tiempo_estimado}h adicionales."
+                    elif tiempo_estimado > horas_reales_disp:
+                        riesgo = "alto"
+                        msg = f"{numero} ({tarea}): {comp} de {req} piezas ({porcentaje_completado}%). Alto riesgo: Toma {tiempo_estimado}h pero quedan {round(horas_reales_disp, 1)}h."
+                    elif tiempo_estimado > horas_reales_disp * 0.8:
+                        riesgo = "medio"
+                        msg = f"{numero} ({tarea}): {comp} de {req} piezas ({porcentaje_completado}%). Riesgo moderado: Consumirá {tiempo_estimado}h de las {round(horas_reales_disp, 1)}h restantes."
+                        
+                    if riesgo:
+                        alertas.append({
+                            "riesgo": riesgo,
+                            "msg": msg
+                        })
+                        
+                return alertas
+            except Exception as e:
+                print(f"Error al detectar retrasos activos: {e}")
+                return []
+
     def simulate_mts_impact(self, cantidad_piezas: int) -> list[dict]:
         """Simula cómo afectará añadir una orden MTS de N piezas a los pedidos MTO vigentes (RF16)"""
         with Session(engine) as db:
