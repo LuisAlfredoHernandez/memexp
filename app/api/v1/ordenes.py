@@ -10,6 +10,9 @@ from app.api.deps import get_current_active_user
 from app.db.usuario_model import Usuario
 from app.core.websocket import manager
 from app.db.prenda_model import Prenda
+from app.services.ml_engine.pipeline import train_model
+from app.services.ml_engine.predictor import predictor
+from app.db.asignacion_model import AsignacionOrden
 import uuid
 import re
 
@@ -201,6 +204,28 @@ def actualizar_orden(
     db.add(db_orden)
     db.commit()
     db.refresh(db_orden)
+    
+    if db_orden.estado == EstadoOrden.COMPLETADA:
+        # Reparar estados huérfanos: Si la orden se completó, sus asignaciones también deben completarse.
+        # Esto previene que la IA lea 'asignacion_orden' en proceso que ya finalizaron.
+        asignaciones = db.exec(select(AsignacionOrden).where(AsignacionOrden.orden_id == db_orden.id)).all()
+        for asig in asignaciones:
+            if str(asig.estado).lower() != "completada":
+                asig.estado = "completada"
+                db.add(asig)
+        db.commit()
+
+        # Disparar Sincronización de IA (Opción 1)
+        if background_tasks:
+            def reentrenar_y_recargar():
+                try:
+                    train_model()
+                    predictor._load_model()
+                except Exception as e:
+                    print(f"[IA Sync] Error reentrenando modelo en background: {e}")
+            
+            background_tasks.add_task(reentrenar_y_recargar)
+
     if background_tasks:
         background_tasks.add_task(manager.broadcast, {
             "event": "order_updated",
