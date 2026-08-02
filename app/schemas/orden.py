@@ -116,7 +116,6 @@ class Orden(OrdenBase):
     id: uuid.UUID
     numero: str
     estado: EstadoOrden
-    cola: int | None = None
     fecha_creacion: datetime = Field(default_factory=datetime.now)
 
     model_config = {"from_attributes": True}
@@ -132,6 +131,5 @@ class OrdenUpdate(BaseModel):
     temporada: Temporada | None = None
     fecha_entrega_estimada: datetime | None = None
     notas: str | None = None
-    cola: int | None = Field(default=None, ge=0)
     lineas: list[LineaOrden] | None = Field(default=None, min_length=1)
     asignaciones: list[AsignacionBase] | None = Field(default=None)

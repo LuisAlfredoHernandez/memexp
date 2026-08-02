@@ -54,10 +54,7 @@ def crear_orden(
     # Crea el objeto Orden principal
     db_orden = OrdenDB(numero=numero_orden, **orden_data)
     
-    # Autoincrementar la cola si no se especifica
-    if db_orden.cola is None:
-        max_cola = db.exec(select(func.max(OrdenDB.cola))).one()
-        db_orden.cola = (max_cola or 0) + 1
+
     
     # Crea los objetos anidados en memoria. SQLModel los asociará.
     for linea_item in lineas_data:
