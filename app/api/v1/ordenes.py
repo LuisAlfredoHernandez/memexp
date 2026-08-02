@@ -37,6 +37,7 @@ def crear_orden(
 ):
     orden_data = orden.model_dump()
     lineas_data = orden_data.pop("lineas")
+    asignaciones_data = orden_data.pop("asignaciones", [])
     
     # Generar el número de orden autoincremental (OP + TipoOP + número)
     todas_ordenes = db.exec(select(OrdenDB.numero)).all()
@@ -104,7 +105,21 @@ def crear_orden(
                 unidad=insumo_item["unidad"]
             )
     
+    
     db.add(db_orden)
+    db.flush() # Para obtener db_orden.id antes del commit
+    
+    # Crear asignaciones
+    for asig_item in asignaciones_data:
+        db_asig = AsignacionOrden(
+            orden_id=db_orden.id,
+            operario_id=asig_item["operario_id"],
+            tarea=asig_item["tarea"],
+            piezas_requeridas=asig_item["piezas_requeridas"],
+            notas=asig_item.get("notas")
+        )
+        db.add(db_asig)
+
     db.commit()
     db.refresh(db_orden)
     if background_tasks:
@@ -148,13 +163,13 @@ def actualizar_orden(
                     db_insumo.stock += link.cantidad_requerida
                     db.add(db_insumo)
 
-        # Estrategia de reemplazo: eliminar líneas antiguas y crear nuevas.
-        # Se requiere cascade delete en la BD para que esto sea eficiente.
-        for linea in db_orden.lineas:
-            db.delete(linea)
-        
+        # Estrategia de reemplazo: Deep Diff
         lineas_data = update_data.pop("lineas")
+        existing_lineas = {str(linea.id): linea for linea in db_orden.lineas}
+        incoming_lineas_ids = set()
+        
         for linea_item in lineas_data:
+            linea_id = str(linea_item.pop("id")) if linea_item.get("id") else None
             insumos_data = linea_item.pop("insumos")
             
             # Registrar prenda si no existe en la BD
@@ -166,7 +181,15 @@ def actualizar_orden(
                     db.add(nueva_prenda)
                     db.commit()
             
-            db_linea = LineaOrdenDB(**linea_item, orden=db_orden)
+            if linea_id and linea_id in existing_lineas:
+                db_linea = existing_lineas[linea_id]
+                for key, value in linea_item.items():
+                    setattr(db_linea, key, value)
+                db_linea.insumo_links.clear() # Limpiar links viejos
+                incoming_lineas_ids.add(linea_id)
+            else:
+                db_linea = LineaOrdenDB(**linea_item, orden=db_orden)
+            
             for insumo_item in insumos_data:
                 db_insumo = db.get(InsumoDB, insumo_item["insumo_id"])
                 if not db_insumo:
@@ -197,6 +220,49 @@ def actualizar_orden(
                     cantidad_requerida=insumo_item["cantidad_requerida"],
                     unidad=insumo_item["unidad"]
                 )
+
+        # Eliminar las prendas que ya no están
+        for ex_id, ex_linea in existing_lineas.items():
+            if ex_id not in incoming_lineas_ids:
+                db_orden.lineas.remove(ex_linea)
+
+    if "asignaciones" in update_data:
+        asignaciones_data = update_data.pop("asignaciones")
+        
+        # Mapear asignaciones existentes
+        existing_asigs = db.exec(select(AsignacionOrden).where(AsignacionOrden.orden_id == db_orden.id)).all()
+        existing_map = {str(a.id): a for a in existing_asigs}
+        
+        incoming_ids = set()
+        
+        for asig_item in asignaciones_data:
+            asig_id = str(asig_item.get("id")) if asig_item.get("id") else None
+            
+            if asig_id and asig_id in existing_map:
+                # Actualizar existente
+                db_asig = existing_map[asig_id]
+                db_asig.operario_id = asig_item["operario_id"]
+                db_asig.tarea = asig_item["tarea"]
+                db_asig.piezas_requeridas = asig_item["piezas_requeridas"]
+                db_asig.notas = asig_item.get("notas")
+                db.add(db_asig)
+                incoming_ids.add(asig_id)
+            else:
+                # Crear nueva
+                db_asig = AsignacionOrden(
+                    orden_id=db_orden.id,
+                    operario_id=asig_item["operario_id"],
+                    tarea=asig_item["tarea"],
+                    piezas_requeridas=asig_item["piezas_requeridas"],
+                    notas=asig_item.get("notas")
+                )
+                db.add(db_asig)
+                
+        # Eliminar las que ya no están en la lista (solo si no han sido comenzadas)
+        for ex_id, ex_asig in existing_map.items():
+            if ex_id not in incoming_ids:
+                if ex_asig.piezas_completadas == 0:
+                    db.delete(ex_asig)
 
     for key, value in update_data.items():
         setattr(db_orden, key, value)
