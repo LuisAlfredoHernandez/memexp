@@ -21,7 +21,7 @@ router = APIRouter(prefix="/ordenes", tags=["Producción - Órdenes"], dependenc
 @router.get("/", response_model=list[OrdenSchema])
 def listar_ordenes(db: Session = Depends(get_session)):
     ordenes = db.exec(select(OrdenDB)).all()
-    return ordenes
+    return [OrdenSchema.model_validate(o) for o in ordenes]
 
 @router.get("/prendas", response_model=list[str])
 def listar_prendas(db: Session = Depends(get_session)):
@@ -82,7 +82,7 @@ def crear_orden(
                     detail=f"Insumo con ID {insumo_item['insumo_id']} no encontrado"
                 )
 
-            if insumo_item["unidad"] != db_insumo.unidad:
+            if insumo_item["unidad"].lower() != db_insumo.unidad.lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"La unidad del insumo no coincide con la unidad de la orden"
@@ -98,12 +98,13 @@ def crear_orden(
             db_insumo.stock -= insumo_item["cantidad_requerida"]
             db.add(db_insumo)
 
-            _ = LineaOrdenInsumoLink(
+            nuevo_link = LineaOrdenInsumoLink(
                 linea_orden=db_linea,
                 insumo_id=insumo_item["insumo_id"],
                 cantidad_requerida=insumo_item["cantidad_requerida"],
                 unidad=insumo_item["unidad"]
             )
+            db.add(nuevo_link)
     
     
     db.add(db_orden)
@@ -131,14 +132,14 @@ def crear_orden(
             "prioridad": db_orden.prioridad.value if hasattr(db_orden.prioridad, "value") else str(db_orden.prioridad),
             "usuario_id": str(current_user.id)
         })
-    return db_orden
+    return OrdenSchema.model_validate(db_orden)
 
 @router.get("/{id}", response_model=OrdenSchema)
 def obtener_orden(id: uuid.UUID, db: Session = Depends(get_session)):
     db_orden = db.get(OrdenDB, id)
     if not db_orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    return db_orden
+    return OrdenSchema.model_validate(db_orden)
 
 @router.patch("/{id}", response_model=OrdenSchema)
 def actualizar_orden(
@@ -185,20 +186,25 @@ def actualizar_orden(
                 db_linea = existing_lineas[linea_id]
                 for key, value in linea_item.items():
                     setattr(db_linea, key, value)
-                db_linea.insumo_links.clear() # Limpiar links viejos
                 incoming_lineas_ids.add(linea_id)
             else:
                 db_linea = LineaOrdenDB(**linea_item, orden=db_orden)
             
+            existing_links = {str(link.insumo_id): link for link in db_linea.insumo_links}
+            incoming_insumo_ids = set()
+
             for insumo_item in insumos_data:
-                db_insumo = db.get(InsumoDB, insumo_item["insumo_id"])
+                insumo_id_str = str(insumo_item["insumo_id"])
+                incoming_insumo_ids.add(insumo_id_str)
+                
+                db_insumo = db.get(InsumoDB, insumo_id_str)
                 if not db_insumo:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Insumo con ID {insumo_item['insumo_id']} no encontrado"
+                        detail=f"Insumo con ID {insumo_id_str} no encontrado"
                     )
 
-                if insumo_item["unidad"] != db_insumo.unidad:
+                if insumo_item["unidad"].lower() != db_insumo.unidad.lower():
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"La unidad del insumo no coincide con la unidad de la orden"
@@ -206,6 +212,7 @@ def actualizar_orden(
                 
                 # Validar stock suficiente
                 if insumo_item["cantidad_requerida"] > db_insumo.stock:
+                    print(f"DEBUG: req={insumo_item['cantidad_requerida']} > stock={db_insumo.stock}")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"No hay stock suficiente para la orden"
@@ -214,12 +221,22 @@ def actualizar_orden(
                 db_insumo.stock -= insumo_item["cantidad_requerida"]
                 db.add(db_insumo)
 
-                _ = LineaOrdenInsumoLink(
-                    linea_orden=db_linea,
-                    insumo_id=insumo_item["insumo_id"],
-                    cantidad_requerida=insumo_item["cantidad_requerida"],
-                    unidad=insumo_item["unidad"]
-                )
+                if insumo_id_str in existing_links:
+                    link = existing_links[insumo_id_str]
+                    link.cantidad_requerida = insumo_item["cantidad_requerida"]
+                    link.unidad = insumo_item["unidad"]
+                else:
+                    nuevo_link = LineaOrdenInsumoLink(
+                        linea_orden=db_linea,
+                        insumo_id=insumo_id_str,
+                        cantidad_requerida=insumo_item["cantidad_requerida"],
+                        unidad=insumo_item["unidad"]
+                    )
+                    db.add(nuevo_link)
+            
+            for ins_id, link in existing_links.items():
+                if ins_id not in incoming_insumo_ids:
+                    db_linea.insumo_links.remove(link)
 
         # Eliminar las prendas que ya no están
         for ex_id, ex_linea in existing_lineas.items():
@@ -336,4 +353,4 @@ def eliminar_orden(
             "orden_id": str(id),
             "usuario_id": str(current_user.id)
         })
-    return
+    return OrdenSchema.model_validate(db_orden)

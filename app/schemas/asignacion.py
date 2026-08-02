@@ -10,6 +10,8 @@ class AsignacionBase(BaseModel):
     piezas_completadas: int = Field(default=0, ge=0)
     estado: str = Field(default="pendiente")
     notas: str | None = None
+    
+    model_config = {"from_attributes": True}
 
 class AsignacionCreate(AsignacionBase):
     orden_id: uuid.UUID
@@ -29,6 +31,8 @@ class AsignacionMiniOrden(BaseModel):
     class ConfigDict:
         from_attributes = True
 
+    model_config = {"from_attributes": True}
+
 class AsignacionResponse(AsignacionBase):
     id: uuid.UUID
     orden_id: uuid.UUID
@@ -37,3 +41,5 @@ class AsignacionResponse(AsignacionBase):
 
     class ConfigDict:
         from_attributes = True
+        
+    model_config = {"from_attributes": True}

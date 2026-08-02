@@ -17,6 +17,8 @@ class InsumoRequerido(BaseModel):
     insumo_id: uuid.UUID
     cantidad_requerida: float
     unidad: UnidadMedida
+    
+    model_config = {"from_attributes": True}
 
 class TipoOP(str, Enum):
     MTO="MTO"
@@ -59,6 +61,8 @@ class LineaOrden(BaseModel):
             ]
         }
     )
+    
+    model_config = {"from_attributes": True}
 
 class OrdenBase(BaseModel):
     cliente: str = Field(..., min_length=2)
@@ -115,8 +119,7 @@ class Orden(OrdenBase):
     cola: int | None = None
     fecha_creacion: datetime = Field(default_factory=datetime.now)
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class OrdenCreate(OrdenBase):
     pass
