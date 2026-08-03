@@ -4,6 +4,7 @@ from enum import Enum
 import uuid
 
 from .insumo import UnidadMedida
+from .asignacion import AsignacionBase
 
 class EstadoOrden(str, Enum):
     PENDIENTE = "pendiente"
@@ -16,6 +17,8 @@ class InsumoRequerido(BaseModel):
     insumo_id: uuid.UUID
     cantidad_requerida: float
     unidad: UnidadMedida
+    
+    model_config = {"from_attributes": True}
 
 class TipoOP(str, Enum):
     MTO="MTO"
@@ -39,8 +42,9 @@ class Talla(str, Enum):
     PREDETERMINADA = "PREDETERMINADA"
 
 class LineaOrden(BaseModel):
+    id: uuid.UUID | None = None
     producto_tipo: str | None = None
-    descripcion: str
+    descripcion: str = Field(..., min_length=2)
     cantidad: int = Field(..., gt=0)
     cantidad_completada: int | None = 0
     talla: Talla
@@ -57,6 +61,8 @@ class LineaOrden(BaseModel):
             ]
         }
     )
+    
+    model_config = {"from_attributes": True}
 
 class OrdenBase(BaseModel):
     cliente: str = Field(..., min_length=2)
@@ -66,6 +72,7 @@ class OrdenBase(BaseModel):
     fecha_entrega_estimada: datetime
     notas: str | None = None
     lineas: list[LineaOrden] = Field(..., min_length=1)
+    asignaciones: list[AsignacionBase] = Field(default=[])
 
     model_config = {
         "json_schema_extra": {
@@ -92,6 +99,14 @@ class OrdenBase(BaseModel):
                             }
                         ]
                     }
+                ],
+                "asignaciones": [
+                    {
+                        "operario_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "tarea": "corte",
+                        "piezas_requeridas": 50,
+                        "notas": "Prioridad alta"
+                    }
                 ]
             }
         }
@@ -101,11 +116,9 @@ class Orden(OrdenBase):
     id: uuid.UUID
     numero: str
     estado: EstadoOrden
-    cola: int | None = None
     fecha_creacion: datetime = Field(default_factory=datetime.now)
 
-    class ConfigDict:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class OrdenCreate(OrdenBase):
     pass
@@ -118,5 +131,5 @@ class OrdenUpdate(BaseModel):
     temporada: Temporada | None = None
     fecha_entrega_estimada: datetime | None = None
     notas: str | None = None
-    cola: int | None = Field(default=None, ge=0)
     lineas: list[LineaOrden] | None = Field(default=None, min_length=1)
+    asignaciones: list[AsignacionBase] | None = Field(default=None)

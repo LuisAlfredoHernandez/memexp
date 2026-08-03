@@ -8,4 +8,5 @@ from .orden_model import Orden
 from .usuario_model import Usuario
 from .reporte_avance_model import ReporteAvance
 from .reporte_averia_model import ReporteAveria
+from .prenda_model import Prenda
 

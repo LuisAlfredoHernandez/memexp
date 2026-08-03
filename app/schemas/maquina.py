@@ -8,13 +8,17 @@ class MaquinaTipo(str, Enum):
     PLANA = "plana"
     CORTE = "corte"
     PLANCHA_DTF = "plancha_dtf"
+    PESO = "peso"
+    OTRO = "otro"
 
 class HabilidadMaquinaria(BaseModel):
     maquina: MaquinaTipo
     nivel_eficiencia: int = Field(default=0, ge=0, le=100)
+    sesiones: int = Field(default=1, ge=1)
 
 class MaquinaEstado(str, Enum):
     OPERATIVA = "operativa"
+    BAJO_REVISION = "bajo_revision"
     MANTENIMIENTO = "mantenimiento"
     FUERA_SERVICIO = "fuera_servicio"
 
@@ -24,6 +28,7 @@ class MaquinaBase(BaseModel):
     nombre: str = Field(..., min_length=2)
     descripcion: str | None = None
     modelo: str | None = None
+    serie: str | None = None
     capacidad_por_hora: float = Field(..., ge=0)
     estado: MaquinaEstado
     operario_asignado_id: uuid.UUID | None = None # ID del operario
@@ -43,6 +48,7 @@ class MaquinaUpdate(BaseModel):
     nombre: str | None = Field(default=None, min_length=2)
     descripcion: str | None = None
     modelo: str | None = None
+    serie: str | None = None
     capacidad_por_hora: float | None = Field(default=None, ge=0)
     estado: MaquinaEstado | None = None
     operario_asignado_id: uuid.UUID | None = None

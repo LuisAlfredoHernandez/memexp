@@ -19,8 +19,7 @@ class Orden(SQLModel, table=True):
     fecha_entrega_estimada: datetime
     notas: Optional[str] = None
     estado: EstadoOrden = Field(default=EstadoOrden.PENDIENTE)
-    cola: Optional[int] = None
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    lineas: List["LineaOrden"] = Relationship(back_populates="orden")
+    lineas: List["LineaOrden"] = Relationship(back_populates="orden", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     asignaciones: List["AsignacionOrden"] = Relationship(back_populates="orden", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
