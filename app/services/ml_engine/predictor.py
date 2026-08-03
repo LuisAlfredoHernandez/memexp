@@ -87,6 +87,7 @@ class DeliveryTimePredictor:
                     FROM asignacion_orden ao
                     JOIN orden o ON ao.orden_id = o.id
                     WHERE ao.estado IN ('pendiente', 'en_proceso')
+                    AND o.estado NOT IN ('completada', 'cancelada')
                 """)
                 pendientes = db.execute(query_pendientes).fetchall()
 
@@ -138,21 +139,9 @@ class DeliveryTimePredictor:
                         "pred": None
                     })
 
-                # Si no hay datos suficientes en base de datos, usamos un mock dinámico realista
+                # Si no hay datos suficientes en base de datos, retornamos array vacío
                 if len(proyecciones) == 0:
-                    mock_data = [
-                        {"d": "Lun", "meta": 30, "real": 26, "pred": None},
-                        {"d": "Mar", "meta": 60, "real": 58, "pred": None},
-                        {"d": "Mie", "meta": 90, "real": 82, "pred": None},
-                        {"d": "Jue", "meta": 120, "real": 114, "pred": None},
-                        {"d": "Vie", "meta": 150, "real": 143, "pred": None},
-                        {"d": "Sab", "meta": 180, "real": 169, "pred": None},
-                        {"d": "Dom", "meta": 210, "real": 204, "pred": 204},
-                        {"d": "Lun+", "meta": 240, "real": None, "pred": 231},
-                        {"d": "Mar+", "meta": 270, "real": None, "pred": 259},
-                        {"d": "Mie+", "meta": 300, "real": None, "pred": 288},
-                    ]
-                    return mock_data
+                    return []
 
                 # Predecir los siguientes 3 días utilizando el promedio del avance actual
                 promedio_diario = acumulado_real / len(proyecciones) if len(proyecciones) > 0 else 25
@@ -176,19 +165,7 @@ class DeliveryTimePredictor:
                 return proyecciones
             except Exception as e:
                 print(f"Error al obtener proyecciones: {e}")
-                # En caso de error, devolver mockup de fallback
-                return [
-                    {"d": "Lun", "meta": 30, "real": 26, "pred": None},
-                    {"d": "Mar", "meta": 60, "real": 58, "pred": None},
-                    {"d": "Mie", "meta": 90, "real": 82, "pred": None},
-                    {"d": "Jue", "meta": 120, "real": 114, "pred": None},
-                    {"d": "Vie", "meta": 150, "real": 143, "pred": None},
-                    {"d": "Sab", "meta": 180, "real": 169, "pred": None},
-                    {"d": "Dom", "meta": 210, "real": 204, "pred": 204},
-                    {"d": "Lun+", "meta": 240, "real": None, "pred": 231},
-                    {"d": "Mar+", "meta": 270, "real": None, "pred": 259},
-                    {"d": "Mie+", "meta": 300, "real": None, "pred": 288},
-                ]
+                return []
 
     def detect_bottlenecks(self) -> dict:
         """Identifica cuellos de botella y recomienda balanceo de línea (RF15)"""
@@ -245,11 +222,7 @@ class DeliveryTimePredictor:
 
                 # Si no hay máquinas registradas, proveemos mock
                 if len(cuellos) == 0:
-                    cuellos = [
-                        { "maquina": "MERROW-01", "nivel": "critica", "sat": 94, "impacto": 3.5, "msg": "Saturación crítica — riesgo de parada en 4 hrs." },
-                        { "maquina": "MERROW-03", "nivel": "advertencia", "sat": 78, "impacto": 1.2, "msg": "Carga elevada. Redistribuir operarios." },
-                        { "maquina": "DTF-01", "nivel": "info", "sat": 35, "impacto": 0, "msg": "Capacidad ociosa. Puede absorber estampado pendiente." }
-                    ]
+                    pass
                     maquinas_saturadas = [("MERROW-01", "merrow")]
 
                 # 2. Encontrar operarios disponibles para balancear
@@ -292,10 +265,7 @@ class DeliveryTimePredictor:
 
                 # Si no hay operarios en DB calificados para balancear, devolvemos fallback
                 if len(recomendaciones) == 0:
-                    recomendaciones = [
-                        { "id": "r1", "empleado": "Josué Reyes", "origen": "COVER-02", "destino": "MERROW-01", "ganancia": 2.5, "prioridad": "alta", "justificacion": "Subutilizado en COVER-02 (58%). Moverlo reducirá saturación crítica." },
-                        { "id": "r2", "empleado": "Carmen Méndez", "origen": "COVER-01", "destino": "MERROW-03", "ganancia": 1.8, "prioridad": "media", "justificacion": "Alta eficiencia en Merrow (88%). Optimizaría salida de joggers." }
-                    ]
+                    pass
 
                 return {
                     "cuellos": cuellos,
@@ -304,15 +274,8 @@ class DeliveryTimePredictor:
             except Exception as e:
                 print(f"Error al detectar cuellos de botella: {e}")
                 return {
-                    "cuellos": [
-                        { "maquina": "MERROW-01", "nivel": "critica", "sat": 94, "impacto": 3.5, "msg": "Saturación crítica — riesgo de parada en 4 hrs." },
-                        { "maquina": "MERROW-03", "nivel": "advertencia", "sat": 78, "impacto": 1.2, "msg": "Carga elevada. Redistribuir operarios." },
-                        { "maquina": "DTF-01", "nivel": "info", "sat": 35, "impacto": 0, "msg": "Capacidad ociosa. Puede absorber estampado pendiente." }
-                    ],
-                    "recomendaciones": [
-                        { "id": "r1", "empleado": "Josué Reyes", "origen": "COVER-02", "destino": "MERROW-01", "ganancia": 2.5, "prioridad": "alta", "justificacion": "Subutilizado en COVER-02 (58%). Moverlo reducirá saturación crítica." },
-                        { "id": "r2", "empleado": "Carmen Méndez", "origen": "COVER-01", "destino": "MERROW-03", "ganancia": 1.8, "prioridad": "media", "justificacion": "Alta eficiencia en Merrow (88%). Optimizaría salida de joggers." }
-                    ]
+                    "cuellos": [],
+                    "recomendaciones": []
                 }
 
     def detect_active_delays(self) -> list[dict]:
@@ -333,6 +296,7 @@ class DeliveryTimePredictor:
                     JOIN orden o ON ao.orden_id = o.id
                     LEFT JOIN linea_orden lo ON lo.orden_id = o.id
                     WHERE ao.estado IN ('pendiente', 'en_proceso')
+                    AND o.estado NOT IN ('completada', 'cancelada')
                 """)
                 active_orders = db.execute(query).fetchall()
                 
@@ -418,13 +382,34 @@ class DeliveryTimePredictor:
                 
                 # Si no hay órdenes vigentes, retornamos mock descriptivo
                 if len(orders) == 0:
-                    return [
-                        { "orden": "ORD-2026-0042", "antes": "17 Mar", "despues": "17 Mar", "impacto": "Sin impacto", "color": "#34d399" },
-                        { "orden": "ORD-2026-0043", "antes": "22 Mar", "despues": "24 Mar", "impacto": "+2 días", "color": "#fbbf24" }
-                    ]
+                    return []
 
-                # Calcular el impacto: cada 200 piezas de MTS retrasan las órdenes MTO en 1 día laboral
-                dias_retraso = int(np.ceil(cantidad_piezas / 200.0))
+                # 2. Obtener la prenda más producida históricamente para usarla de base (baseline)
+                query_prenda = text("""
+                    SELECT producto_tipo 
+                    FROM linea_orden 
+                    GROUP BY producto_tipo 
+                    ORDER BY COUNT(*) DESC 
+                    LIMIT 1
+                """)
+                prenda_base = db.execute(query_prenda).scalar() or "camiseta"
+                
+                # 3. Preguntar a la IA cuánto tiempo tardará
+                # La IA toma en cuenta las máquinas averiadas y la historia de producción
+                tiempo_estimado, _, _ = self.predict(
+                    cantidad_piezas=cantidad_piezas,
+                    prioridad_alta=False, # El stock MTS no es urgente por definición
+                    lineas_produccion=1,
+                    tipo_prenda=prenda_base
+                )
+                
+                # 4. Calcular días de retraso
+                if tiempo_estimado is not None:
+                    # Asumimos turno de 8 horas para convertir horas de la IA a días
+                    dias_retraso = int(np.ceil(tiempo_estimado / 8.0))
+                else:
+                    # Fallback (Salvavidas) si la IA no sabe predecir aún
+                    dias_retraso = int(np.ceil(cantidad_piezas / 200.0))
                 
                 for o in orders:
                     oid, numero, prio, fecha_entrega = o
@@ -448,10 +433,7 @@ class DeliveryTimePredictor:
                 return simulacion
             except Exception as e:
                 print(f"Error en simulación MTS: {e}")
-                return [
-                    { "orden": "ORD-2026-0042", "antes": "17 Mar", "despues": "17 Mar", "impacto": "Sin impacto", "color": "#34d399" },
-                    { "orden": "ORD-2026-0043", "antes": "22 Mar", "despues": "24 Mar", "impacto": "+2 días", "color": "#fbbf24" }
-                ]
+                return []
 
 # Instanciar singleton
 predictor = DeliveryTimePredictor()
