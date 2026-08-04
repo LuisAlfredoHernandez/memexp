@@ -87,7 +87,7 @@ class DeliveryTimePredictor:
                     FROM asignacion_orden ao
                     JOIN orden o ON ao.orden_id = o.id
                     WHERE ao.estado IN ('pendiente', 'en_proceso')
-                    AND o.estado NOT IN ('completada', 'cancelada')
+                    AND o.estado NOT IN ('COMPLETADA', 'CANCELADA')
                 """)
                 pendientes = db.execute(query_pendientes).fetchall()
 
@@ -296,7 +296,7 @@ class DeliveryTimePredictor:
                     JOIN orden o ON ao.orden_id = o.id
                     LEFT JOIN linea_orden lo ON lo.orden_id = o.id
                     WHERE ao.estado IN ('pendiente', 'en_proceso')
-                    AND o.estado NOT IN ('completada', 'cancelada')
+                    AND o.estado NOT IN ('COMPLETADA', 'CANCELADA')
                 """)
                 active_orders = db.execute(query).fetchall()
                 

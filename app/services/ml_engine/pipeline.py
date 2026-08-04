@@ -36,17 +36,17 @@ def train_model():
         # 2. Consultar histórico de producción (Solo Lectura)
         query = text("""
             SELECT 
-                ao.piezas_requeridas AS cantidad_piezas,
+                MAX(lo.cantidad) AS cantidad_piezas,
                 CASE WHEN LOWER(o.prioridad::text) IN ('alta', 'urgente') THEN 1 ELSE 0 END AS prioridad_alta,
                 1 AS lineas_produccion,
                 COALESCE(MAX(lo.producto_tipo), 'desconocido') AS tipo_prenda,
-                EXTRACT(EPOCH FROM (MAX(ra.fecha_reporte) - ao.fecha_asignacion)) / 3600.0 AS tiempo_horas
-            FROM asignacion_orden ao
-            JOIN orden o ON ao.orden_id = o.id
+                EXTRACT(EPOCH FROM (MAX(ra.fecha_reporte) - MIN(ao.fecha_asignacion))) / 3600.0 AS tiempo_horas
+            FROM orden o
+            JOIN asignacion_orden ao ON ao.orden_id = o.id
             LEFT JOIN linea_orden lo ON lo.orden_id = o.id
             JOIN reporte_avance ra ON ra.asignacion_id = ao.id
-            WHERE ao.estado::text = 'COMPLETADA' AND ra.estado = 'validado'
-            GROUP BY ao.id, ao.piezas_requeridas, o.prioridad, ao.fecha_asignacion
+            WHERE o.estado::text = 'COMPLETADA' AND ra.estado = 'validado'
+            GROUP BY o.id, o.prioridad
         """)
         
         result = db.execute(query).fetchall()
