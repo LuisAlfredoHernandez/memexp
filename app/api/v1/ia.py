@@ -116,13 +116,21 @@ def predecir_tiempo_orden_items(
 
 @router.get("/prendas-unicas")
 def obtener_prendas_unicas(db: Session = Depends(get_session)):
-    """Obtiene la lista de prendas (producto_tipo) únicas registradas en la base de datos"""
+    """Obtiene la lista de prendas (producto_tipo) conocidas por la IA o registradas en BD"""
     try:
-        # Se obtienen los valores únicos de producto_tipo desde la tabla linea_orden
-        result = db.execute(text("SELECT DISTINCT producto_tipo FROM linea_orden WHERE producto_tipo IS NOT NULL"))
-        prendas = [row[0] for row in result.fetchall()]
+        prendas = []
+        # Prioridad 1: Obtener prendas directamente de lo que aprendió la red neuronal
+        if predictor.model is not None and predictor.features:
+            for feature in predictor.features:
+                if feature.startswith("tipo_prenda_"):
+                    prendas.append(feature.replace("tipo_prenda_", ""))
+        else:
+            # Fallback: Se obtienen los valores únicos si no hay modelo entrenado
+            result = db.execute(text("SELECT DISTINCT producto_tipo FROM linea_orden WHERE producto_tipo IS NOT NULL"))
+            prendas = [row[0] for row in result.fetchall()]
+            
         # Formatear: capitalizar la primera letra y ordenar alfabéticamente
-        prendas_formateadas = sorted([p.capitalize() for p in prendas])
+        prendas_formateadas = sorted([str(p).capitalize() for p in prendas])
         return {"prendas": prendas_formateadas}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -291,11 +299,21 @@ async def subir_datos_entrenamiento(
                 )
                 
         with Session(engine) as db:
-            # Limpiar TODOS los datos de entrenamientos previos para evitar duplicación y basura
-            db.execute(text("DELETE FROM reporte_avance WHERE notas = 'Cargado desde Excel'"))
-            db.execute(text("DELETE FROM asignacion_orden WHERE notas = 'Cargado desde Excel'"))
-            db.execute(text("DELETE FROM linea_orden WHERE orden_id IN (SELECT id FROM orden WHERE notas = 'Cargado desde Excel')"))
-            db.execute(text("DELETE FROM orden WHERE notas = 'Cargado desde Excel'"))
+            # 1. Desvincular llaves foráneas circulares
+            db.execute(text("UPDATE maquina SET operario_asignado_id = NULL"))
+            db.execute(text("UPDATE operario SET maquina_actual_id = NULL, orden_actual_id = NULL"))
+            
+            # 2. Limpiar tablas dependientes (de abajo hacia arriba)
+            db.execute(text("DELETE FROM reporte_averia"))
+            db.execute(text("DELETE FROM reporte_avance"))
+            db.execute(text("DELETE FROM asignacion_orden"))
+            db.execute(text("DELETE FROM linea_orden_insumo_link"))
+            db.execute(text("DELETE FROM linea_orden"))
+            
+            # 3. Limpiar tablas principales
+            db.execute(text("DELETE FROM orden"))
+            db.execute(text("DELETE FROM operario"))
+            db.execute(text("DELETE FROM usuario WHERE rol = 'Operario'"))
             db.commit()
             
             ordenes_insertadas = {}

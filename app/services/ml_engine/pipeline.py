@@ -45,7 +45,7 @@ def train_model():
             JOIN asignacion_orden ao ON ao.orden_id = o.id
             LEFT JOIN linea_orden lo ON lo.orden_id = o.id
             JOIN reporte_avance ra ON ra.asignacion_id = ao.id
-            WHERE o.estado::text = 'COMPLETADA' AND ra.estado = 'validado'
+            WHERE o.estado::text = 'COMPLETADA' AND ra.estado = 'validado' AND (o.notas IS NULL OR (o.notas != 'Carga Seed' AND o.notas != 'Orden inicial migrada de mocks.'))
             GROUP BY o.id, o.prioridad
         """)
         
