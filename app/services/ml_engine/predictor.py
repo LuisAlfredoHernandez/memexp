@@ -11,6 +11,7 @@ class DeliveryTimePredictor:
     def __init__(self):
         self.model = None
         self.features = []
+        self.max_por_prenda = {}
         self._load_model()
 
     def _load_model(self):
@@ -23,23 +24,31 @@ class DeliveryTimePredictor:
                     self.model = payload["model"]
                     self.features = payload.get("features", [])
                     self.metrics = payload.get("metrics", {})
+                    self.max_por_prenda = payload.get("max_por_prenda", {})
                 else:
                     self.model = payload
                     self.features = ["cantidad_piezas", "prioridad_alta", "lineas_produccion"]
                     self.metrics = {}
+                    self.max_por_prenda = {}
                 print(f"✅ Modelo cargado correctamente desde: {settings.MODEL_PATH}")
             else:
                 print(f"⚠️ Advertencia: No existe el modelo en {settings.MODEL_PATH}. No se podrán realizar predicciones.")
         except Exception as e:
             print(f"❌ Error al cargar el modelo: {e}. No se podrán realizar predicciones.")
 
-    def predict(self, cantidad_piezas: int, prioridad_alta: bool, lineas_produccion: int, tipo_prenda: str) -> tuple[float | None, float | None, bool]:
-        """Predice el tiempo de entrega en horas (RF12). Retorna (estimación, margen_error, prenda_nueva)."""
+    def predict(self, cantidad_piezas: int, prioridad_alta: bool, lineas_produccion: int, tipo_prenda: str) -> tuple[float | None, float | None, bool, bool]:
+        """Predice el tiempo de entrega en horas (RF12). Retorna (estimación, margen_error, prenda_nueva, fuera_de_rango)."""
         if self.model is None:
             raise ValueError("El modelo de predicción no está calibrado. Por favor, suba el historial de producción (Excel) en la pestaña de Gestión para calibrar la IA.")
         
         tipo_prenda_clean = str(tipo_prenda).strip().lower()
         prenda_nueva = False
+        fuera_de_rango = False
+        
+        # Validar si excede el máximo histórico (con 10% de tolerancia)
+        max_historico = self.max_por_prenda.get(tipo_prenda_clean, 0)
+        if max_historico > 0 and cantidad_piezas > (max_historico * 1.1):
+            fuera_de_rango = True
         
         # Formato de la columna one-hot para tipo_prenda
         target_col = f"tipo_prenda_{tipo_prenda_clean}"
@@ -49,7 +58,7 @@ class DeliveryTimePredictor:
             prenda_nueva = True
             
         if prenda_nueva:
-            return None, None, True
+            return None, None, True, False
             
         try:
             input_dict = {
@@ -72,7 +81,7 @@ class DeliveryTimePredictor:
             estimacion = max(0.5, estimacion) # Limitar a un mínimo razonable de media hora
             
             margen_error = estimacion * 0.08
-            return float(round(estimacion, 2)), float(round(margen_error, 2)), prenda_nueva
+            return float(round(estimacion, 2)), float(round(margen_error, 2)), prenda_nueva, fuera_de_rango
         except Exception as e:
             raise ValueError(f"Fallo al ejecutar la predicción en el modelo: {e}")
 
@@ -396,7 +405,7 @@ class DeliveryTimePredictor:
                 
                 # 3. Preguntar a la IA cuánto tiempo tardará
                 # La IA toma en cuenta las máquinas averiadas y la historia de producción
-                tiempo_estimado, _, _ = self.predict(
+                tiempo_estimado, _, _, fuera_de_rango = self.predict(
                     cantidad_piezas=cantidad_piezas,
                     prioridad_alta=False, # El stock MTS no es urgente por definición
                     lineas_produccion=1,
@@ -419,21 +428,22 @@ class DeliveryTimePredictor:
                     retraso_aplicado = 0 if prio in ["urgente", "alta"] else dias_retraso
                     despues_dt = antes_dt + pd.Timedelta(days=retraso_aplicado)
                     
+                    fecha_orig_str = antes_dt.strftime("%d %b")
+                    nueva_fecha_str = despues_dt.strftime("%d %b")
+                    
                     impacto_str = "Sin impacto" if retraso_aplicado == 0 else f"+{retraso_aplicado} días"
                     color = "#34d399" if retraso_aplicado == 0 else ("#f87171" if retraso_aplicado > 3 else "#fbbf24")
                     
                     simulacion.append({
                         "orden": numero,
-                        "antes": antes_dt.strftime("%d %b"),
-                        "despues": despues_dt.strftime("%d %b"),
+                        "antes": fecha_orig_str,
+                        "despues": nueva_fecha_str,
                         "impacto": impacto_str,
-                        "color": color
+                        "color": color,
+                        "fuera_de_rango": fuera_de_rango
                     })
 
                 return simulacion
             except Exception as e:
                 print(f"Error en simulación MTS: {e}")
-                return []
-
-# Instanciar singleton
 predictor = DeliveryTimePredictor()

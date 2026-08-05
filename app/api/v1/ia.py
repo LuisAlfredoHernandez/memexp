@@ -37,7 +37,7 @@ def predecir_tiempo_entrega(
 ):
     """Estima el tiempo de entrega de una asignación en horas (RF12)"""
     try:
-        tiempo, error, prenda_nueva = predictor.predict(
+        tiempo, error, prenda_nueva, fuera_de_rango = predictor.predict(
             cantidad_piezas=request.cantidad_piezas,
             prioridad_alta=request.prioridad_alta,
             lineas_produccion=request.lineas_produccion,
@@ -53,7 +53,8 @@ def predecir_tiempo_entrega(
             margen_error_horas=error,
             modelo_version="random_forest_v1",
             prenda_nueva=prenda_nueva,
-            algoritmo_usado=algoritmo
+            algoritmo_usado=algoritmo,
+            fuera_de_rango=fuera_de_rango
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -73,7 +74,7 @@ def predecir_tiempo_orden_items(
         error_total = 0.0
         
         for item in request.items:
-            tiempo, error, prenda_nueva = predictor.predict(
+            tiempo, error, prenda_nueva, fuera_de_rango = predictor.predict(
                 cantidad_piezas=item.cantidad_piezas,
                 prioridad_alta=request.prioridad_alta,
                 lineas_produccion=request.lineas_produccion,
@@ -85,7 +86,8 @@ def predecir_tiempo_orden_items(
                 cantidad_piezas=item.cantidad_piezas,
                 tiempo_estimado_horas=tiempo,
                 margen_error_horas=error,
-                prenda_nueva=prenda_nueva
+                prenda_nueva=prenda_nueva,
+                fuera_de_rango=fuera_de_rango
             ))
             
             if prenda_nueva:
@@ -165,7 +167,7 @@ def predecir_tiempo_orden_id(
             if cantidad <= 0:
                 continue
                 
-            tiempo, error, prenda_nueva = predictor.predict(
+            tiempo, error, prenda_nueva, fuera_de_rango = predictor.predict(
                 cantidad_piezas=cantidad,
                 prioridad_alta=prioridad_alta,
                 lineas_produccion=lineas_produccion,
@@ -177,7 +179,8 @@ def predecir_tiempo_orden_id(
                 cantidad_piezas=cantidad,
                 tiempo_estimado_horas=tiempo,
                 margen_error_horas=error,
-                prenda_nueva=prenda_nueva
+                prenda_nueva=prenda_nueva,
+                fuera_de_rango=fuera_de_rango
             ))
             
             if prenda_nueva:

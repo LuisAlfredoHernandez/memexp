@@ -72,6 +72,10 @@ def train_model():
         # Normalizar tipo_prenda para que coincida con el predictor
         df["tipo_prenda"] = df["tipo_prenda"].astype(str).str.strip().str.lower()
         
+        # Calcular el máximo histórico de cantidad de piezas por prenda para validar extrapolación futura
+        grouped = df.groupby('tipo_prenda')['cantidad_piezas'].max()
+        max_por_prenda = {str(k): int(v) for k, v in grouped.items()}
+        
         # Convertir variables categóricas (tipo_prenda) a numéricas usando One-Hot Encoding
         df_encoded = pd.get_dummies(df, columns=["tipo_prenda"], drop_first=False)
         
@@ -140,6 +144,7 @@ def train_model():
         payload = {
             "model": new_model,
             "features": feature_cols,
+            "max_por_prenda": max_por_prenda,
             "metrics": {
                 "mae_actual": active_mae,
                 "mse_actual": active_mse,
