@@ -6,8 +6,7 @@ from sqlalchemy import text
 from sqlmodel import Session
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from app.core.config import settings
 from app.db.session import engine
 
@@ -94,20 +93,17 @@ def train_model():
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
-        # Determinar algoritmo según volumen de datos (Modelo Híbrido Dinámico)
-        algoritmo_nombre = "Random Forest"
-        if n_samples < 10:
-            algoritmo_nombre = "Linear Regression"
-            new_model = LinearRegression()
-        else:
-            new_model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
-            
+        # Algoritmo de predicción unificado
+        algoritmo_nombre = "Linear Regression"
+        new_model = LinearRegression()
+        
         new_model.fit(X_train, y_train)
 
         # Calcular métricas de error
         y_pred = new_model.predict(X_test)
         new_mae = float(mean_absolute_error(y_test, y_pred))
         new_mse = float(mean_squared_error(y_test, y_pred))
+        new_mape = float(mean_absolute_percentage_error(y_test, y_pred))
 
         # 4. Comparar con el modelo activo para fines informativos diagnósticos
         active_mae = None
@@ -132,6 +128,7 @@ def train_model():
                 y_pred_active = active_model.predict(X_test_active)
                 active_mae = float(mean_absolute_error(y_test, y_pred_active))
                 active_mse = float(mean_squared_error(y_test, y_pred_active))
+                active_mape = float(mean_absolute_percentage_error(y_test, y_pred_active))
             except Exception:
                 # Si falla al cargar el modelo anterior, ignorar diagnóstico
                 pass
@@ -148,8 +145,10 @@ def train_model():
             "metrics": {
                 "mae_actual": active_mae,
                 "mse_actual": active_mse,
+                "mape_actual": active_mape if 'active_mape' in locals() else None,
                 "mae_nuevo": new_mae,
                 "mse_nuevo": new_mse,
+                "mape_nuevo": new_mape,
                 "registros_entrenados": len(df),
                 "fecha_calibracion": datetime.now().isoformat(),
                 "algoritmo": algoritmo_nombre
@@ -162,7 +161,9 @@ def train_model():
             "registros_entrenados": len(df),
             "mae_actual": active_mae,
             "mse_actual": active_mse,
+            "mape_actual": active_mape if 'active_mape' in locals() else None,
             "mae_nuevo": new_mae,
             "mse_nuevo": new_mse,
+            "mape_nuevo": new_mape,
             "version_publicada": f"{algoritmo_nombre.lower().replace(' ', '_')}_v1"
         }

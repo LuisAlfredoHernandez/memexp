@@ -80,7 +80,15 @@ class DeliveryTimePredictor:
             estimacion = self.model.predict(df_entrada)[0]
             estimacion = max(0.5, estimacion) # Limitar a un mínimo razonable de media hora
             
-            margen_error = estimacion * 0.08
+            # Híbrido: Usar MAPE para pedidos pequeños, pero no exceder el MAE absoluto para pedidos grandes
+            mape_global = self.metrics.get("mape_nuevo")
+            mae_global = self.metrics.get("mae_nuevo")
+            
+            if mape_global is not None and mae_global is not None:
+                margen_error = min(mae_global, estimacion * mape_global)
+            else:
+                margen_error = estimacion * 0.08
+            
             return float(round(estimacion, 2)), float(round(margen_error, 2)), prenda_nueva, fuera_de_rango
         except Exception as e:
             raise ValueError(f"Fallo al ejecutar la predicción en el modelo: {e}")
