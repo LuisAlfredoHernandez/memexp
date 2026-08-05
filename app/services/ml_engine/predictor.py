@@ -433,13 +433,21 @@ class DeliveryTimePredictor:
                     antes_dt = pd.to_datetime(fecha_entrega) if fecha_entrega else pd.Timestamp.now() + pd.Timedelta(days=5)
                     
                     # Pedidos urgentes MTO no sufren retraso (prioridad sobre MTS - RF15)
-                    retraso_aplicado = 0 if prio in ["urgente", "alta"] else dias_retraso
+                    print(f"DEBUG: prio={prio}, dias_retraso={dias_retraso}, tiempo_estimado={tiempo_estimado}")
+                    retraso_aplicado = 0 if prio in ["urgente", "alta", "ALTA", "URGENTE"] else dias_retraso
                     despues_dt = antes_dt + pd.Timedelta(days=retraso_aplicado)
                     
                     fecha_orig_str = antes_dt.strftime("%d %b")
                     nueva_fecha_str = despues_dt.strftime("%d %b")
                     
-                    impacto_str = "Sin impacto" if retraso_aplicado == 0 else f"+{retraso_aplicado} días"
+                    if retraso_aplicado == 0:
+                        if dias_retraso > 0:
+                            impacto_str = "Protegido (Prioridad Alta)"
+                        else:
+                            impacto_str = "Sin impacto"
+                    else:
+                        impacto_str = f"+{retraso_aplicado} días"
+                    
                     color = "#34d399" if retraso_aplicado == 0 else ("#f87171" if retraso_aplicado > 3 else "#fbbf24")
                     
                     simulacion.append({
