@@ -114,6 +114,19 @@ def predecir_tiempo_orden_items(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+@router.get("/prendas-unicas")
+def obtener_prendas_unicas(db: Session = Depends(get_session)):
+    """Obtiene la lista de prendas (producto_tipo) únicas registradas en la base de datos"""
+    try:
+        # Se obtienen los valores únicos de producto_tipo desde la tabla linea_orden
+        result = db.execute(text("SELECT DISTINCT producto_tipo FROM linea_orden WHERE producto_tipo IS NOT NULL"))
+        prendas = [row[0] for row in result.fetchall()]
+        # Formatear: capitalizar la primera letra y ordenar alfabéticamente
+        prendas_formateadas = sorted([p.capitalize() for p in prendas])
+        return {"prendas": prendas_formateadas}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 @router.get("/predict/order/{order_id}", response_model=OrderPredictionResponse)
 def predecir_tiempo_orden_id(
     order_id: uuid.UUID,

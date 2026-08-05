@@ -69,6 +69,9 @@ def train_model():
                 f"con cantidad y duración mayores a cero (actualmente hay {len(df)})."
             )
         
+        # Normalizar tipo_prenda para que coincida con el predictor
+        df["tipo_prenda"] = df["tipo_prenda"].astype(str).str.strip().str.lower()
+        
         # Convertir variables categóricas (tipo_prenda) a numéricas usando One-Hot Encoding
         df_encoded = pd.get_dummies(df, columns=["tipo_prenda"], drop_first=False)
         
