@@ -1,7 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from app.api.v1 import auth, insumos, operarios, maquinas, ordenes, usuarios, asignaciones, reportes_avance, reportes_averia, ia
+from app.api.v1 import auth, insumos, operarios, maquinas, ordenes, usuarios, asignaciones, reportes_avance, reportes_averia, ia, dashboard
 from app.db.session import create_db_and_tables
 from app.core.websocket import manager
 
@@ -49,6 +49,7 @@ app.include_router(asignaciones.router)
 app.include_router(reportes_avance.router)
 app.include_router(reportes_averia.router)
 app.include_router(ia.router)
+app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 
 
 @app.get("/")
