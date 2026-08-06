@@ -14,12 +14,12 @@ class DashboardMachineStat(BaseModel):
     tipo: str
     uso: int
     estado: str
-    piezasHoy: int
+    piezasSemana: int
 
 class DashboardOperatorStat(BaseModel):
     nombre: str
     eficiencia: int
-    piezasHoy: int
+    piezasSemana: int
     estado: str
 
 class DashboardDistribucion(BaseModel):

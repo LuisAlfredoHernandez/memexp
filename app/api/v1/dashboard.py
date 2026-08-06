@@ -15,12 +15,20 @@ from app.schemas.dashboard import DashboardStatsResponse
 router = APIRouter()
 
 @router.get("/stats", response_model=DashboardStatsResponse)
-def get_dashboard_stats(session: Session = Depends(get_session)):
+def get_dashboard_stats(periodo: str = "semana", session: Session = Depends(get_session)):
     max_date_db = session.query(func.max(func.date(ReporteAvance.fecha_reporte))).scalar()
     hoy = max_date_db if max_date_db else datetime.now(timezone.utc).date()
+    if periodo == "mes":
+        dias_historia = 29
+        dias_multiplicador = 30
+    else:
+        dias_historia = 6
+        dias_multiplicador = 7
+
+    fecha_inicio_periodo = hoy - timedelta(days=dias_historia)
     
-    # 1. DATOS SEMANA (Últimos 7 días)
-    fechas = [hoy - timedelta(days=i) for i in range(6, -1, -1)]
+    # 1. DATOS PERIODO
+    fechas = [hoy - timedelta(days=i) for i in range(dias_historia, -1, -1)]
     datos_semana = []
     
     for d in fechas:
@@ -58,13 +66,14 @@ def get_dashboard_stats(session: Session = Depends(get_session)):
     maquinas_uso = []
     
     for maq in maquinas:
-        piezas_hoy = session.query(func.sum(ReporteAvance.piezas_buenas)).filter(
+        piezas_periodo = session.query(func.sum(ReporteAvance.piezas_buenas)).filter(
             ReporteAvance.maquina_id == str(maq.id),
-            func.date(ReporteAvance.fecha_reporte) == hoy
+            func.date(ReporteAvance.fecha_reporte) >= fecha_inicio_periodo,
+            func.date(ReporteAvance.fecha_reporte) <= hoy
         ).scalar() or 0
         
-        capacidad_dia = maq.capacidad_por_hora * 8
-        uso = int((piezas_hoy / capacidad_dia) * 100) if capacidad_dia > 0 else 0
+        capacidad_periodo = maq.capacidad_por_hora * 8 * dias_multiplicador
+        uso = int((piezas_periodo / capacidad_periodo) * 100) if capacidad_periodo > 0 else 0
         if uso > 100:
             uso = 100
             
@@ -75,7 +84,7 @@ def get_dashboard_stats(session: Session = Depends(get_session)):
             "tipo": maq.tipo,
             "uso": uso,
             "estado": estado_str,
-            "piezasHoy": int(piezas_hoy)
+            "piezasSemana": int(piezas_periodo)
         })
         
     # 3. OPERARIOS RENDIMIENTO
@@ -83,13 +92,14 @@ def get_dashboard_stats(session: Session = Depends(get_session)):
     operarios_rend = []
     
     for op in operarios:
-        piezas_hoy = session.query(func.sum(ReporteAvance.piezas_buenas)).filter(
+        piezas_periodo = session.query(func.sum(ReporteAvance.piezas_buenas)).filter(
             ReporteAvance.operario_id == op.id,
-            func.date(ReporteAvance.fecha_reporte) == hoy
+            func.date(ReporteAvance.fecha_reporte) >= fecha_inicio_periodo,
+            func.date(ReporteAvance.fecha_reporte) <= hoy
         ).scalar() or 0
         
-        meta_op = 30
-        eficiencia = int((piezas_hoy / meta_op) * 100) if meta_op > 0 else 0
+        meta_op = 30 * dias_multiplicador
+        eficiencia = int((piezas_periodo / meta_op) * 100) if meta_op > 0 else 0
         if eficiencia > 100:
             eficiencia = 100
             
@@ -100,18 +110,21 @@ def get_dashboard_stats(session: Session = Depends(get_session)):
         operarios_rend.append({
             "nombre": f"{op.nombre} {op.apellido[0] + '.' if op.apellido else ''}",
             "eficiencia": eficiencia,
-            "piezasHoy": int(piezas_hoy),
+            "piezasSemana": int(piezas_periodo),
             "estado": estado_str
         })
+        
+    operarios_rend.sort(key=lambda x: x["eficiencia"], reverse=True)
 
     from sqlalchemy import cast, String
     # 4. DISTRIBUCION MAQUINAS
-    # Sumar piezas de hoy agrupado por tipo de máquina
+    # Sumar piezas del periodo agrupado por tipo de máquina
     dist_query = session.query(
         Maquina.tipo, 
         func.sum(ReporteAvance.piezas_buenas)
     ).join(ReporteAvance, cast(ReporteAvance.maquina_id, String) == cast(Maquina.id, String)).filter(
-        func.date(ReporteAvance.fecha_reporte) == hoy
+        func.date(ReporteAvance.fecha_reporte) >= fecha_inicio_periodo,
+        func.date(ReporteAvance.fecha_reporte) <= hoy
     ).group_by(Maquina.tipo).all()
 
     color_map = {
@@ -124,12 +137,18 @@ def get_dashboard_stats(session: Session = Depends(get_session)):
     
     distribucion_maquinas = []
     for tipo, total in dist_query:
-        if total and total > 0:
-            color = color_map.get(str(tipo).lower(), "#64748b")
+        if total > 0:
+            if hasattr(tipo, "value"):
+                tipo_str = tipo.value
+            elif hasattr(tipo, "name"):
+                tipo_str = tipo.name.lower()
+            else:
+                tipo_str = str(tipo).split(".")[-1].lower()
+                
             distribucion_maquinas.append({
-                "nombre": str(tipo).capitalize(),
+                "nombre": tipo_str.capitalize(),
                 "valor": int(total),
-                "color": color
+                "color": color_map.get(tipo_str, "#94a3b8")
             })
             
     return {
