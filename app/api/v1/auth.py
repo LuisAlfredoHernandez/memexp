@@ -8,9 +8,10 @@ from jose import jwt, JWTError
 
 from app.db.session import get_session
 from app.db.usuario_model import Usuario
-from app.core.security import verify_password, create_access_token, hash_password
+import uuid
+from app.core.security import verify_password, create_access_token, hash_password, create_refresh_token
 from app.core.config import settings
-from app.schemas.token import Token, PasswordReset
+from app.schemas.token import Token, PasswordReset, TokenRefreshRequest
 from app.schemas.usuario import UsuarioEstado
 from app.schemas.msg import Msg
 
@@ -37,7 +38,12 @@ def login_for_access_token(
         )
 
     access_token = create_access_token(subject=user.id)
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(subject=user.id)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "refresh_token": refresh_token
+    }
 
 @router.post("/password-recovery/{email}", response_model=Msg, status_code=status.HTTP_200_OK)
 def recover_password(email: EmailStr, db: Session = Depends(get_session)):
@@ -89,3 +95,44 @@ def reset_password(body: PasswordReset, db: Session = Depends(get_session)):
     db.commit()
 
     return {"msg": "La contraseña ha sido actualizada exitosamente."}
+
+@router.post("/refresh", response_model=Token)
+def refresh_token_endpoint(
+    body: TokenRefreshRequest,
+    db: Session = Depends(get_session)
+):
+    """
+    Valida un token de refresco y devuelve un nuevo access token y un nuevo refresh token.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token de refresco inválido o expirado",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(body.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str | None = payload.get("sub")
+        token_type: str | None = payload.get("type")
+        
+        # Validamos explícitamente que sea un token de tipo refresh
+        if user_id is None or token_type != "refresh":
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    try:
+        parsed_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise credentials_exception
+
+    user = db.get(Usuario, parsed_uuid)
+    if user is None or user.estado != UsuarioEstado.ACTIVO:
+        raise credentials_exception
+
+    access_token = create_access_token(subject=user.id)
+    new_refresh_token = create_refresh_token(subject=user.id)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "refresh_token": new_refresh_token
+    }

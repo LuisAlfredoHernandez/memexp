@@ -40,7 +40,7 @@ class UsuarioUpdate(BaseModel):
 class UsuarioMe(UsuarioBase):
     id: uuid.UUID
     orden_activa: uuid.UUID | None = None
-    maquina_actual: MaquinaTipo | None = None
+    maquina_actual_id: uuid.UUID | None = None
     habilidades: list[HabilidadMaquinaria] = []
 
     class ConfigDict:

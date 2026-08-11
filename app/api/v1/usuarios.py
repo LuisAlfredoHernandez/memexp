@@ -30,19 +30,24 @@ def crear_usuario(usuario: UsuarioCreate, db: Session = Depends(get_session)):
 def obtener_usuario_actual(current_user: Usuario = Depends(get_current_active_user)):
     user_data = current_user.model_dump()
     orden_activa = None
-    maquina_actual = None
+    maquina_actual_id = None
     habilidades = []
     
     if current_user.operario:
         if current_user.operario.orden_actual_id:
             orden_activa = current_user.operario.orden_actual_id
-        if current_user.operario.maquinaActual:
-            maquina_actual = current_user.operario.maquinaActual
+        if current_user.operario.maquina_actual_id:
+            maquina_actual_id = str(current_user.operario.maquina_actual_id)
         if current_user.operario.habilidades:
-            habilidades = current_user.operario.habilidades
+            cleaned_habs = []
+            for h in current_user.operario.habilidades:
+                item = dict(h) if isinstance(h, dict) else (h.model_dump() if hasattr(h, "model_dump") else dict(h))
+                item["maquina"] = str(item.get("maquina", "")).split(".")[-1].lower()
+                cleaned_habs.append(item)
+            habilidades = cleaned_habs
             
     user_data["orden_activa"] = orden_activa
-    user_data["maquina_actual"] = maquina_actual
+    user_data["maquina_actual_id"] = maquina_actual_id
     user_data["habilidades"] = habilidades
     
     return user_data
