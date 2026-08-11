@@ -4,6 +4,7 @@ from typing import List
 import uuid
 import random
 import io
+import json
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import text
@@ -36,7 +37,7 @@ def predecir_tiempo_entrega(
 ):
     """Estima el tiempo de entrega de una asignación en horas (RF12)"""
     try:
-        tiempo, error, prenda_nueva = predictor.predict(
+        tiempo, error, prenda_nueva, fuera_de_rango = predictor.predict(
             cantidad_piezas=request.cantidad_piezas,
             prioridad_alta=request.prioridad_alta,
             lineas_produccion=request.lineas_produccion,
@@ -52,7 +53,8 @@ def predecir_tiempo_entrega(
             margen_error_horas=error,
             modelo_version="random_forest_v1",
             prenda_nueva=prenda_nueva,
-            algoritmo_usado=algoritmo
+            algoritmo_usado=algoritmo,
+            fuera_de_rango=fuera_de_rango
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -72,7 +74,7 @@ def predecir_tiempo_orden_items(
         error_total = 0.0
         
         for item in request.items:
-            tiempo, error, prenda_nueva = predictor.predict(
+            tiempo, error, prenda_nueva, fuera_de_rango = predictor.predict(
                 cantidad_piezas=item.cantidad_piezas,
                 prioridad_alta=request.prioridad_alta,
                 lineas_produccion=request.lineas_produccion,
@@ -84,7 +86,8 @@ def predecir_tiempo_orden_items(
                 cantidad_piezas=item.cantidad_piezas,
                 tiempo_estimado_horas=tiempo,
                 margen_error_horas=error,
-                prenda_nueva=prenda_nueva
+                prenda_nueva=prenda_nueva,
+                fuera_de_rango=fuera_de_rango
             ))
             
             if prenda_nueva:
@@ -110,6 +113,27 @@ def predecir_tiempo_orden_items(
             )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/prendas-unicas")
+def obtener_prendas_unicas(db: Session = Depends(get_session)):
+    """Obtiene la lista de prendas (producto_tipo) conocidas por la IA o registradas en BD"""
+    try:
+        prendas = []
+        # Prioridad 1: Obtener prendas directamente de lo que aprendió la red neuronal
+        if predictor.model is not None and predictor.features:
+            for feature in predictor.features:
+                if feature.startswith("tipo_prenda_"):
+                    prendas.append(feature.replace("tipo_prenda_", ""))
+        else:
+            # Fallback: Se obtienen los valores únicos si no hay modelo entrenado
+            result = db.execute(text("SELECT DISTINCT producto_tipo FROM linea_orden WHERE producto_tipo IS NOT NULL"))
+            prendas = [row[0] for row in result.fetchall()]
+            
+        # Formatear: capitalizar la primera letra y ordenar alfabéticamente
+        prendas_formateadas = sorted([str(p).capitalize() for p in prendas])
+        return {"prendas": prendas_formateadas}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -143,7 +167,7 @@ def predecir_tiempo_orden_id(
             if cantidad <= 0:
                 continue
                 
-            tiempo, error, prenda_nueva = predictor.predict(
+            tiempo, error, prenda_nueva, fuera_de_rango = predictor.predict(
                 cantidad_piezas=cantidad,
                 prioridad_alta=prioridad_alta,
                 lineas_produccion=lineas_produccion,
@@ -155,7 +179,8 @@ def predecir_tiempo_orden_id(
                 cantidad_piezas=cantidad,
                 tiempo_estimado_horas=tiempo,
                 margen_error_horas=error,
-                prenda_nueva=prenda_nueva
+                prenda_nueva=prenda_nueva,
+                fuera_de_rango=fuera_de_rango
             ))
             
             if prenda_nueva:
@@ -265,7 +290,7 @@ async def subir_datos_entrenamiento(
         
         required_cols = [
             "Fecha", "Número de Orden", "Cliente", "Tipo", "Prioridad", 
-            "Operario", "Máquina", "Prenda", "Piezas Requeridas", 
+            "Tarea", "Operario", "Máquina", "Prenda", "Piezas Requeridas", 
             "Piezas Buenas", "Piezas Defectuosas", "Horas de Costura", "Estado"
         ]
         
@@ -277,6 +302,25 @@ async def subir_datos_entrenamiento(
                 )
                 
         with Session(engine) as db:
+            # 1. Desvincular llaves foráneas circulares
+            db.execute(text("UPDATE maquina SET operario_asignado_id = NULL"))
+            db.execute(text("UPDATE operario SET maquina_actual_id = NULL, orden_actual_id = NULL"))
+            
+            # 2. Limpiar tablas dependientes (de abajo hacia arriba)
+            db.execute(text("DELETE FROM reporte_averia"))
+            db.execute(text("DELETE FROM reporte_avance"))
+            db.execute(text("DELETE FROM asignacion_orden"))
+            db.execute(text("DELETE FROM linea_orden_insumo_link"))
+            db.execute(text("DELETE FROM linea_orden"))
+            
+            # 3. Limpiar tablas principales
+            db.execute(text("DELETE FROM orden"))
+            db.execute(text("DELETE FROM operario"))
+            db.execute(text("DELETE FROM usuario WHERE rol = 'Operario'"))
+            db.commit()
+            
+            ordenes_insertadas = {}
+
             for _, row in df.iterrows():
                 num_orden = str(row["Número de Orden"]).strip()
                 cliente = str(row["Cliente"]).strip()
@@ -290,6 +334,7 @@ async def subir_datos_entrenamiento(
                 if prioridad not in ["baja", "normal", "alta", "urgente"]:
                     prioridad = "normal"
                     
+                tarea_str = str(row["Tarea"]).strip()
                 operario_full = str(row["Operario"]).strip()
                 maquina_cod = str(row["Máquina"]).strip().upper()
                 prenda = str(row["Prenda"]).strip().lower()
@@ -310,14 +355,16 @@ async def subir_datos_entrenamiento(
                     fecha_val = datetime.now()
                     
                 # 1. Asegurar existencia de la Máquina primero para obtener capacidad_por_hora
-                maq_tipo = maquina_cod.split("-")[0].lower()
+                maq_tipo = maquina_cod.split("-")[0].upper()
+                if maq_tipo == "PLANCHA":
+                    maq_tipo = "PLANCHA_DTF"
                 maq_row = db.execute(text("SELECT id, capacidad_por_hora FROM maquina WHERE codigo = :cod LIMIT 1"), {"cod": maquina_cod}).fetchone()
                 if not maq_row:
                     maq_id = uuid.uuid4()
                     capacidad_hora = 10.0
                     db.execute(text("""
                         INSERT INTO maquina (id, codigo, tipo, nombre, estado, capacidad_por_hora)
-                        VALUES (:mid, :cod, :tipo, :nombre, 'operativa', :cap)
+                        VALUES (:mid, :cod, :tipo, :nombre, 'OPERATIVA', :cap)
                     """), {"mid": maq_id, "cod": maquina_cod, "tipo": maq_tipo, "nombre": f"Máquina {maquina_cod}", "cap": capacidad_hora})
                 else:
                     maq_id, capacidad_hora = maq_row
@@ -333,7 +380,7 @@ async def subir_datos_entrenamiento(
                 
                 op_id = db.execute(text("""
                     SELECT id FROM usuario 
-                    WHERE nombre = :nombre AND apellido = :apellido AND rol = 'operario' 
+                    WHERE nombre = :nombre AND apellido = :apellido AND rol = 'Operario' 
                     LIMIT 1
                 """), {"nombre": nombre_op, "apellido": apellido_op}).scalar()
                 
@@ -342,62 +389,54 @@ async def subir_datos_entrenamiento(
                     correo_fake = f"{nombre_op.lower()}{random.randint(100, 999)}@memefabrica.com"
                     db.execute(text("""
                         INSERT INTO usuario (id, nombre, apellido, correo, hashed_password, rol, estado)
-                        VALUES (:uid, :nombre, :apellido, :correo, '$2b$12$Z16Hw/pS8J2Tj0G8Qh...fake', 'operario', 'activo')
+                        VALUES (:uid, :nombre, :apellido, :correo, '$2b$12$Z16Hw/pS8J2Tj0G8Qh...fake', 'Operario', 'ACTIVO')
                     """), {"uid": op_id, "nombre": nombre_op, "apellido": apellido_op, "correo": correo_fake})
                     
                     db.execute(text("""
-                        INSERT INTO operario (id, maquinaActual, habilidades, estado)
-                        VALUES (:opid, :maq, :habs, 'activo')
+                        INSERT INTO operario (id, "maquinaActual", habilidades)
+                        VALUES (:opid, :maq, :habs)
                     """), {
                         "opid": op_id, 
-                        "maq": maquina_cod, 
-                        "habs": f'[{"maquina": "{maq_tipo}", "nivel_eficiencia": {eficiencia_calc}}]'
+                        "maq": maq_tipo, 
+                        "habs": json.dumps([{"maquina": maq_tipo, "nivel_eficiencia": eficiencia_calc}])
                     })
                 else:
                     # Si el operario ya existía, actualizar dinámicamente su eficiencia con este nuevo registro
                     actualizar_eficiencia_operario(db, op_id, maq_tipo, eficiencia_calc)
                 
-                # 3. Limpiar registros previos con el mismo número de orden para evitar duplicados
-                db.execute(text("""
-                    DELETE FROM reporte_avance 
-                    WHERE asignacion_id IN (
-                        SELECT id FROM asignacion_orden 
-                        WHERE orden_id IN (SELECT id FROM orden WHERE numero = :num)
-                    )
-                """), {"num": num_orden})
-                db.execute(text("DELETE FROM asignacion_orden WHERE orden_id IN (SELECT id FROM orden WHERE numero = :num)"), {"num": num_orden})
-                db.execute(text("DELETE FROM linea_orden WHERE orden_id IN (SELECT id FROM orden WHERE numero = :num)"), {"num": num_orden})
-                db.execute(text("DELETE FROM orden WHERE numero = :num"), {"num": num_orden})
+                # 3. Insertar Orden y LineaOrden (solo la primera vez que se ve el Número de Orden)
+                if num_orden not in ordenes_insertadas:
+                    ord_id = uuid.uuid4()
+                    db.execute(text("""
+                        INSERT INTO orden (id, numero, cliente, tipo, prioridad, fecha_entrega_estimada, estado, notas, fecha_creacion)
+                        VALUES (:oid, :num, :cliente, :tipo, :prio, :fecha, :estado, 'Cargado desde Excel', :fecha)
+                    """), {
+                        "oid": ord_id,
+                        "num": num_orden,
+                        "cliente": cliente,
+                        "tipo": tipo_op,
+                        "prio": prioridad,
+                        "fecha": fecha_val,
+                        "estado": estado_str
+                    })
+                    
+                    linea_id = uuid.uuid4()
+                    db.execute(text("""
+                        INSERT INTO linea_orden (id, producto_tipo, descripcion, cantidad, cantidad_completada, talla, color, orden_id)
+                        VALUES (:lid, :prenda, :desc, :cant, :cant, 'MIXTA', 'Normal', :oid)
+                    """), {
+                        "lid": linea_id,
+                        "prenda": prenda,
+                        "desc": f"Prenda {prenda} cargada desde Excel",
+                        "cant": piezas_req,
+                        "oid": ord_id
+                    })
+                    
+                    ordenes_insertadas[num_orden] = ord_id
+                else:
+                    ord_id = ordenes_insertadas[num_orden]
                 
-                # 4. Insertar Orden
-                ord_id = uuid.uuid4()
-                db.execute(text("""
-                    INSERT INTO orden (id, numero, cliente, tipo, prioridad, fecha_entrega_estimada, estado, notas, fecha_creacion)
-                    VALUES (:oid, :num, :cliente, :tipo, :prio, :fecha, :estado, 'Cargado desde Excel', :fecha)
-                """), {
-                    "oid": ord_id,
-                    "num": num_orden,
-                    "cliente": cliente,
-                    "tipo": tipo_op,
-                    "prio": prioridad,
-                    "fecha": fecha_val,
-                    "estado": estado_str
-                })
-                
-                # 5. Insertar LineaOrden (Guarda la prenda/producto_tipo)
-                linea_id = uuid.uuid4()
-                db.execute(text("""
-                    INSERT INTO linea_orden (id, producto_tipo, descripcion, cantidad, cantidad_completada, talla, color, orden_id)
-                    VALUES (:lid, :prenda, :desc, :cant, :cant, 'MIXTA', 'Normal', :oid)
-                """), {
-                    "lid": linea_id,
-                    "prenda": prenda,
-                    "desc": f"Prenda {prenda} cargada desde Excel",
-                    "cant": piezas_req,
-                    "oid": ord_id
-                })
-                
-                # 6. Insertar Asignación
+                # 4. Insertar Asignación (1 por cada fila de Excel = 1 Tarea)
                 asig_id = uuid.uuid4()
                 db.execute(text("""
                     INSERT INTO asignacion_orden (id, orden_id, operario_id, tarea, piezas_requeridas, piezas_completadas, estado, fecha_asignacion, notas)
@@ -406,7 +445,7 @@ async def subir_datos_entrenamiento(
                     "aid": asig_id,
                     "oid": ord_id,
                     "opid": op_id,
-                    "tarea": f"Confección de {prenda}",
+                    "tarea": tarea_str,
                     "cant": piezas_req,
                     "fecha": fecha_val
                 })
@@ -455,19 +494,19 @@ def sembrar_datos_historicos(current_user: Usuario = Depends(get_current_active_
             op_id = db.execute(text("SELECT id FROM operario LIMIT 1")).scalar()
             if not op_id:
                 # Buscar un usuario operario
-                user_id = db.execute(text("SELECT id FROM usuario WHERE rol = 'operario' LIMIT 1")).scalar()
+                user_id = db.execute(text("SELECT id FROM usuario WHERE rol = 'Operario' LIMIT 1")).scalar()
                 if not user_id:
                     user_id = uuid.uuid4()
                     # Insertar usuario
                     db.execute(text("""
                         INSERT INTO usuario (id, nombre, apellido, correo, hashed_password, rol, estado)
-                        VALUES (:uid, 'Ramon', 'Perez', 'operario1@meme.com', '$2b$12$Z16Hw/pS8J2Tj0G8Qh...fake', 'operario', 'activo')
+                        VALUES (:uid, 'Ramon', 'Perez', 'operario1@meme.com', '$2b$12$Z16Hw/pS8J2Tj0G8Qh...fake', 'Operario', 'ACTIVO')
                     """), {"uid": user_id})
                 
                 op_id = user_id
                 db.execute(text("""
-                    INSERT INTO operario (id, maquinaActual, habilidades, estado)
-                    VALUES (:opid, 'merrow-01', '[{"maquina": "merrow", "nivel_eficiencia": 88}]', 'activo')
+                    INSERT INTO operario (id, "maquinaActual", habilidades)
+                    VALUES (:opid, 'MERROW', '[{"maquina": "MERROW", "nivel_eficiencia": 88}]')
                 """), {"opid": op_id})
             
             # 2. Asegurar máquina operativa
@@ -476,7 +515,7 @@ def sembrar_datos_historicos(current_user: Usuario = Depends(get_current_active_
                 maq_id = uuid.uuid4()
                 db.execute(text("""
                     INSERT INTO maquina (id, codigo, tipo, nombre, estado, capacidad_por_hora)
-                    VALUES (:mid, 'MERROW-01', 'merrow', 'Cortadora Merrow', 'operativa', 10.0)
+                    VALUES (:mid, 'MERROW-01', 'MERROW', 'Cortadora Merrow', 'OPERATIVA', 10.0)
                 """), {"mid": maq_id})
 
             # 3. Limpiar datos de seed anteriores para evitar duplicados

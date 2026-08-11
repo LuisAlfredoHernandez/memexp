@@ -6,8 +6,7 @@ from sqlalchemy import text
 from sqlmodel import Session
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from app.core.config import settings
 from app.db.session import engine
 
@@ -36,17 +35,17 @@ def train_model():
         # 2. Consultar histórico de producción (Solo Lectura)
         query = text("""
             SELECT 
-                ao.piezas_requeridas AS cantidad_piezas,
+                MAX(lo.cantidad) AS cantidad_piezas,
                 CASE WHEN LOWER(o.prioridad::text) IN ('alta', 'urgente') THEN 1 ELSE 0 END AS prioridad_alta,
                 1 AS lineas_produccion,
                 COALESCE(MAX(lo.producto_tipo), 'desconocido') AS tipo_prenda,
-                EXTRACT(EPOCH FROM (MAX(ra.fecha_reporte) - ao.fecha_asignacion)) / 3600.0 AS tiempo_horas
-            FROM asignacion_orden ao
-            JOIN orden o ON ao.orden_id = o.id
+                EXTRACT(EPOCH FROM (MAX(ra.fecha_reporte) - MIN(ao.fecha_asignacion))) / 3600.0 AS tiempo_horas
+            FROM orden o
+            JOIN asignacion_orden ao ON ao.orden_id = o.id
             LEFT JOIN linea_orden lo ON lo.orden_id = o.id
             JOIN reporte_avance ra ON ra.asignacion_id = ao.id
-            WHERE ao.estado::text = 'COMPLETADA' AND ra.estado = 'validado'
-            GROUP BY ao.id, ao.piezas_requeridas, o.prioridad, ao.fecha_asignacion
+            WHERE o.estado::text = 'COMPLETADA' AND ra.estado = 'validado' AND (o.notas IS NULL OR (o.notas != 'Carga Seed' AND o.notas != 'Orden inicial migrada de mocks.'))
+            GROUP BY o.id, o.prioridad
         """)
         
         result = db.execute(query).fetchall()
@@ -69,6 +68,13 @@ def train_model():
                 f"con cantidad y duración mayores a cero (actualmente hay {len(df)})."
             )
         
+        # Normalizar tipo_prenda para que coincida con el predictor
+        df["tipo_prenda"] = df["tipo_prenda"].astype(str).str.strip().str.lower()
+        
+        # Calcular el máximo histórico de cantidad de piezas por prenda para validar extrapolación futura
+        grouped = df.groupby('tipo_prenda')['cantidad_piezas'].max()
+        max_por_prenda = {str(k): int(v) for k, v in grouped.items()}
+        
         # Convertir variables categóricas (tipo_prenda) a numéricas usando One-Hot Encoding
         df_encoded = pd.get_dummies(df, columns=["tipo_prenda"], drop_first=False)
         
@@ -87,20 +93,17 @@ def train_model():
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
-        # Determinar algoritmo según volumen de datos (Modelo Híbrido Dinámico)
-        algoritmo_nombre = "Random Forest"
-        if n_samples < 10:
-            algoritmo_nombre = "Linear Regression"
-            new_model = LinearRegression()
-        else:
-            new_model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
-            
+        # Algoritmo de predicción unificado
+        algoritmo_nombre = "Linear Regression"
+        new_model = LinearRegression()
+        
         new_model.fit(X_train, y_train)
 
         # Calcular métricas de error
         y_pred = new_model.predict(X_test)
         new_mae = float(mean_absolute_error(y_test, y_pred))
         new_mse = float(mean_squared_error(y_test, y_pred))
+        new_mape = float(mean_absolute_percentage_error(y_test, y_pred))
 
         # 4. Comparar con el modelo activo para fines informativos diagnósticos
         active_mae = None
@@ -125,6 +128,7 @@ def train_model():
                 y_pred_active = active_model.predict(X_test_active)
                 active_mae = float(mean_absolute_error(y_test, y_pred_active))
                 active_mse = float(mean_squared_error(y_test, y_pred_active))
+                active_mape = float(mean_absolute_percentage_error(y_test, y_pred_active))
             except Exception:
                 # Si falla al cargar el modelo anterior, ignorar diagnóstico
                 pass
@@ -137,11 +141,14 @@ def train_model():
         payload = {
             "model": new_model,
             "features": feature_cols,
+            "max_por_prenda": max_por_prenda,
             "metrics": {
                 "mae_actual": active_mae,
                 "mse_actual": active_mse,
+                "mape_actual": active_mape if 'active_mape' in locals() else None,
                 "mae_nuevo": new_mae,
                 "mse_nuevo": new_mse,
+                "mape_nuevo": new_mape,
                 "registros_entrenados": len(df),
                 "fecha_calibracion": datetime.now().isoformat(),
                 "algoritmo": algoritmo_nombre
@@ -154,7 +161,9 @@ def train_model():
             "registros_entrenados": len(df),
             "mae_actual": active_mae,
             "mse_actual": active_mse,
+            "mape_actual": active_mape if 'active_mape' in locals() else None,
             "mae_nuevo": new_mae,
             "mse_nuevo": new_mse,
+            "mape_nuevo": new_mape,
             "version_publicada": f"{algoritmo_nombre.lower().replace(' ', '_')}_v1"
         }

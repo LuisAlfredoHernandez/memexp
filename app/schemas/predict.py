@@ -14,6 +14,7 @@ class PredictionResponse(BaseModel):
     modelo_version: str
     prenda_nueva: bool
     algoritmo_usado: str
+    fuera_de_rango: bool = False
 
 # --- Esquemas para predicciones de órdenes multilínea ---
 class PredictionRequestItem(BaseModel):
@@ -31,6 +32,7 @@ class ItemPredictionDetail(BaseModel):
     tiempo_estimado_horas: Optional[float] = None
     margen_error_horas: Optional[float] = None
     prenda_nueva: bool
+    fuera_de_rango: bool = False
 
 class OrderPredictionResponse(BaseModel):
     tiempo_estimado_total_horas: Optional[float] = None
@@ -48,6 +50,7 @@ class MtsSimulationItem(BaseModel):
     despues: str
     impacto: str
     color: str
+    fuera_de_rango: bool = False
 
 # --- Gestión / Reentrenamiento (RF19–RF22) ---
 class TrainResponse(BaseModel):
