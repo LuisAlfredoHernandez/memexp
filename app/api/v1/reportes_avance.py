@@ -188,6 +188,11 @@ def validar_reporte_avance(
                 db_asignacion.estado = "en_proceso"
                 
             db.add(db_asignacion)
+            
+            # Automatización: Si la orden aún está pendiente, arrancarla automáticamente
+            if db_asignacion.orden and db_asignacion.orden.estado == "pendiente":
+                db_asignacion.orden.estado = "en_proceso"
+                db.add(db_asignacion.orden)
 
         # Recalcular eficiencia dinámica del operario para la máquina utilizada
         maquina_val = db_reporte.maquina_id

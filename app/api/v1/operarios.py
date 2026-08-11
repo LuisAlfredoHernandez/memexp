@@ -32,18 +32,28 @@ def crear_operario(
     
     hashed_password = hash_password(user_create.password)
     
+    from sqlalchemy.exc import IntegrityError
     db_usuario = Usuario.model_validate(user_create, update={"hashed_password": hashed_password})
     db.add(db_usuario)
-    db.commit()
-    db.refresh(db_usuario)
+    try:
+        db.flush() # Envía a la BD para obtener el ID, pero NO guarda definitivamente
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="El correo electrónico ya está registrado.")
     
     # 2. Crear el registro de Operario, usando el ID del usuario.
     operario_data = operario.model_dump(exclude={"nombre", "apellido", "correo", "password", "rol", "estado"})
     db_operario = Operario(id=db_usuario.id, **operario_data)
     
     db.add(db_operario)
-    db.commit()
-    db.refresh(db_operario)
+    try:
+        db.commit() # Ahora sí, guarda AMBAS tablas al mismo tiempo en una sola transacción
+        db.refresh(db_operario)
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Error al completar la creación del operario: {str(e)}")
     
     # Asignar la relación de usuario para que Pydantic pueda leer las properties
     db_operario.usuario = db_usuario
