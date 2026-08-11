@@ -454,8 +454,8 @@ async def subir_datos_entrenamiento(
                 rep_id = uuid.uuid4()
                 fecha_fin = fecha_val + timedelta(hours=horas)
                 db.execute(text("""
-                    INSERT INTO reporte_avance (id, asignacion_id, operario_id, piezas_reportadas, piezas_buenas, piezas_defectuosas, estado, fecha_reporte, fecha_validacion, notas)
-                    VALUES (:rid, :aid, :opid, :cant, :buenas, :def, 'validado', :fecha_fin, :fecha_fin, 'Cargado desde Excel')
+                    INSERT INTO reporte_avance (id, asignacion_id, operario_id, piezas_reportadas, piezas_buenas, piezas_defectuosas, estado, fecha_reporte, fecha_validacion, notas, maquina_id)
+                    VALUES (:rid, :aid, :opid, :cant, :buenas, :def, 'validado', :fecha_fin, :fecha_fin, 'Cargado desde Excel', :maq_id)
                 """), {
                     "rid": rep_id,
                     "aid": asig_id,
@@ -463,7 +463,8 @@ async def subir_datos_entrenamiento(
                     "cant": piezas_req,
                     "buenas": piezas_buenas,
                     "def": piezas_def,
-                    "fecha_fin": fecha_fin
+                    "fecha_fin": fecha_fin,
+                    "maq_id": maquina_cod
                 })
             
             db.commit()
