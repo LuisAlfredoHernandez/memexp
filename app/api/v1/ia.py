@@ -464,7 +464,7 @@ async def subir_datos_entrenamiento(
                     "buenas": piezas_buenas,
                     "def": piezas_def,
                     "fecha_fin": fecha_fin,
-                    "maq_id": maquina_cod
+                    "maq_id": str(maq_id)
                 })
             
             db.commit()
