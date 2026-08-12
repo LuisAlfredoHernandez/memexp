@@ -30,10 +30,16 @@ def crear_operario(
 ):
     user_create = UsuarioCreate.model_validate(operario.model_dump())
     
-    hashed_password = hash_password(user_create.password)
+    hashed_password = hash_password("Meme2026!")
     
     from sqlalchemy.exc import IntegrityError
-    db_usuario = Usuario.model_validate(user_create, update={"hashed_password": hashed_password})
+    db_usuario = Usuario.model_validate(
+        user_create, 
+        update={
+            "hashed_password": hashed_password,
+            "debe_cambiar_password": True
+        }
+    )
     db.add(db_usuario)
     try:
         db.flush() # Envía a la BD para obtener el ID, pero NO guarda definitivamente
@@ -42,7 +48,7 @@ def crear_operario(
         raise HTTPException(status_code=400, detail="El correo electrónico ya está registrado.")
     
     # 2. Crear el registro de Operario, usando el ID del usuario.
-    operario_data = operario.model_dump(exclude={"nombre", "apellido", "correo", "password", "rol", "estado"})
+    operario_data = operario.model_dump(exclude={"nombre", "apellido", "correo", "rol", "estado"})
     db_operario = Operario(id=db_usuario.id, **operario_data)
     
     db.add(db_operario)

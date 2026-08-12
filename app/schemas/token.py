@@ -4,6 +4,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     refresh_token: str | None = None
+    requires_password_change: bool = False
 
 class TokenRefreshRequest(BaseModel):
     refresh_token: str

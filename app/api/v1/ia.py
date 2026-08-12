@@ -387,10 +387,12 @@ async def subir_datos_entrenamiento(
                 if not op_id:
                     op_id = uuid.uuid4()
                     correo_fake = f"{nombre_op.lower()}{random.randint(100, 999)}@memefabrica.com"
+                    from app.core.security import hash_password
+                    pwd_hash = hash_password("Meme2026!")
                     db.execute(text("""
-                        INSERT INTO usuario (id, nombre, apellido, correo, hashed_password, rol, estado)
-                        VALUES (:uid, :nombre, :apellido, :correo, '$2b$12$Z16Hw/pS8J2Tj0G8Qh...fake', 'Operario', 'ACTIVO')
-                    """), {"uid": op_id, "nombre": nombre_op, "apellido": apellido_op, "correo": correo_fake})
+                        INSERT INTO usuario (id, nombre, apellido, correo, hashed_password, rol, estado, debe_cambiar_password)
+                        VALUES (:uid, :nombre, :apellido, :correo, :pwd, 'Operario', 'ACTIVO', TRUE)
+                    """), {"uid": op_id, "nombre": nombre_op, "apellido": apellido_op, "correo": correo_fake, "pwd": pwd_hash})
                     
                     db.execute(text("""
                         INSERT INTO operario (id, "maquinaActual", habilidades)

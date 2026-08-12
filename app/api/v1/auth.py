@@ -42,7 +42,8 @@ def login_for_access_token(
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "refresh_token": refresh_token
+        "refresh_token": refresh_token,
+        "requires_password_change": user.debe_cambiar_password
     }
 
 @router.post("/password-recovery/{email}", response_model=Msg, status_code=status.HTTP_200_OK)
