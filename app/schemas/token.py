@@ -15,3 +15,7 @@ class TokenData(BaseModel):
 class PasswordReset(BaseModel):
     token: str
     new_password: str = Field(..., min_length=8)
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)

@@ -11,7 +11,8 @@ from app.db.usuario_model import Usuario
 import uuid
 from app.core.security import verify_password, create_access_token, hash_password, create_refresh_token
 from app.core.config import settings
-from app.schemas.token import Token, PasswordReset, TokenRefreshRequest
+from app.schemas.token import Token, PasswordReset, TokenRefreshRequest, PasswordChange
+from app.api.deps import get_current_active_user
 from app.schemas.usuario import UsuarioEstado
 from app.schemas.msg import Msg
 
@@ -137,3 +138,27 @@ def refresh_token_endpoint(
         "token_type": "bearer",
         "refresh_token": new_refresh_token
     }
+
+@router.post("/change-password", response_model=Msg)
+def change_password(
+    body: PasswordChange,
+    current_user: Usuario = Depends(get_current_active_user),
+    db: Session = Depends(get_session)
+):
+    """
+    Cambia la contraseña del usuario autenticado.
+    Verifica la contraseña actual y actualiza el flag debe_cambiar_password.
+    """
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta."
+        )
+
+    current_user.hashed_password = hash_password(body.new_password)
+    current_user.debe_cambiar_password = False
+    
+    db.add(current_user)
+    db.commit()
+
+    return {"msg": "La contraseña ha sido actualizada exitosamente."}

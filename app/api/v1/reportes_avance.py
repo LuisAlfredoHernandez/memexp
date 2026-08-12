@@ -200,7 +200,26 @@ def validar_reporte_avance(
             maquina_val = db_reporte.operario.maquinaActual
 
         if maquina_val:
-            maq_obj = db.exec(select(Maquina).where((Maquina.codigo == maquina_val) | (Maquina.tipo == maquina_val))).first()
+            import uuid
+            maq_obj = None
+            try:
+                maq_uuid = uuid.UUID(str(maquina_val))
+                maq_obj = db.exec(select(Maquina).where(Maquina.id == maq_uuid)).first()
+            except ValueError:
+                pass
+            
+            if not maq_obj:
+                try:
+                    # Intenta buscar por tipo o codigo, asumiendo que no es un UUID válido.
+                    # Primero validamos si el string es un tipo válido para no explotar la DB
+                    from app.schemas.maquina import MaquinaTipo
+                    if str(maquina_val) in [e.value for e in MaquinaTipo]:
+                        maq_obj = db.exec(select(Maquina).where(Maquina.tipo == str(maquina_val))).first()
+                    if not maq_obj:
+                        maq_obj = db.exec(select(Maquina).where(Maquina.codigo == str(maquina_val))).first()
+                except Exception:
+                    pass
+
             capacidad_hora = float(maq_obj.capacidad_por_hora) if maq_obj and maq_obj.capacidad_por_hora > 0 else 10.0
             maq_tipo = str(maq_obj.tipo if maq_obj else maquina_val.split("-")[0]).lower()
 
