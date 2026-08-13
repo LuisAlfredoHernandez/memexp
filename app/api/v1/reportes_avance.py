@@ -202,9 +202,14 @@ def validar_reporte_avance(
                 else:
                     # ES LA ÚLTIMA TAREA DE LA SECUENCIA: SON PIEZAS TERMINADAS
                     # Iteramos las líneas de la orden para ir llenando su "cantidad_completada" en cascada
-                    if db_asignacion.orden and db_asignacion.orden.lineas:
+                    from app.db.linea_orden_model import LineaOrden
+                    lineas = db.exec(
+                        select(LineaOrden)
+                        .where(LineaOrden.orden_id == db_asignacion.orden_id)
+                    ).all()
+                    if lineas:
                         piezas_restantes = payload.piezas_buenas
-                        for linea in db_asignacion.orden.lineas:
+                        for linea in lineas:
                             faltantes = linea.cantidad - (linea.cantidad_completada or 0)
                             if faltantes > 0 and piezas_restantes > 0:
                                 a_sumar = min(faltantes, piezas_restantes)
