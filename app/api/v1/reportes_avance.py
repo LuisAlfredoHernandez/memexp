@@ -199,11 +199,44 @@ def validar_reporte_avance(
                 if siguiente_asig:
                     siguiente_asig.piezas_habilitadas += payload.piezas_buenas
                     db.add(siguiente_asig)
+                else:
+                    # ES LA ÚLTIMA TAREA DE LA SECUENCIA: SON PIEZAS TERMINADAS
+                    # Iteramos las líneas de la orden para ir llenando su "cantidad_completada" en cascada
+                    if db_asignacion.orden and db_asignacion.orden.lineas:
+                        piezas_restantes = payload.piezas_buenas
+                        for linea in db_asignacion.orden.lineas:
+                            faltantes = linea.cantidad - (linea.cantidad_completada or 0)
+                            if faltantes > 0 and piezas_restantes > 0:
+                                a_sumar = min(faltantes, piezas_restantes)
+                                linea.cantidad_completada = (linea.cantidad_completada or 0) + a_sumar
+                                piezas_restantes -= a_sumar
+                                db.add(linea)
             
-            # Automatización: Si la orden aún está pendiente, arrancarla automáticamente
-            if db_asignacion.orden and db_asignacion.orden.estado == "pendiente":
-                db_asignacion.orden.estado = "en_proceso"
-                db.add(db_asignacion.orden)
+            # Automatización de estados de la Orden General
+            if db_asignacion.orden:
+                orden = db_asignacion.orden
+                
+                # 1. Arrancarla automáticamente si estaba pendiente
+                if orden.estado == "pendiente":
+                    orden.estado = "en_proceso"
+                
+                # 2. Consultar todas las asignaciones de esta misma orden
+                todas_asignaciones = db.exec(
+                    select(AsignacionOrden)
+                    .where(AsignacionOrden.orden_id == orden.id)
+                ).all()
+                
+                # Verificar si en todas las asignaciones las piezas_completadas ya alcanzaron o superaron las piezas_requeridas
+                todas_completadas = all(
+                    asig.piezas_completadas >= asig.piezas_requeridas 
+                    for asig in todas_asignaciones
+                )
+                
+                # Si todas terminaron, cambiamos la orden global a completada
+                if todas_completadas:
+                    orden.estado = "completada"
+                
+                db.add(orden)
 
         # Recalcular eficiencia dinámica del operario para la máquina utilizada
         maquina_val = db_reporte.maquina_id
