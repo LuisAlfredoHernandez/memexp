@@ -108,12 +108,14 @@ def crear_orden(
     db.flush() # Para obtener db_orden.id antes del commit
     
     # Crear asignaciones
-    for asig_item in asignaciones_data:
+    for idx, asig_item in enumerate(asignaciones_data):
         db_asig = AsignacionOrden(
             orden_id=db_orden.id,
             operario_id=asig_item["operario_id"],
             tarea=asig_item["tarea"],
+            secuencia=idx + 1,
             piezas_requeridas=asig_item["piezas_requeridas"],
+            piezas_habilitadas=0,
             notas=asig_item.get("notas")
         )
         db.add(db_asig)
@@ -249,7 +251,7 @@ def actualizar_orden(
         
         incoming_ids = set()
         
-        for asig_item in asignaciones_data:
+        for idx, asig_item in enumerate(asignaciones_data):
             asig_id = str(asig_item.get("id")) if asig_item.get("id") else None
             
             if asig_id and asig_id in existing_map:
@@ -257,6 +259,7 @@ def actualizar_orden(
                 db_asig = existing_map[asig_id]
                 db_asig.operario_id = asig_item["operario_id"]
                 db_asig.tarea = asig_item["tarea"]
+                db_asig.secuencia = idx + 1
                 db_asig.piezas_requeridas = asig_item["piezas_requeridas"]
                 db_asig.notas = asig_item.get("notas")
                 db.add(db_asig)
@@ -267,7 +270,9 @@ def actualizar_orden(
                     orden_id=db_orden.id,
                     operario_id=asig_item["operario_id"],
                     tarea=asig_item["tarea"],
+                    secuencia=idx + 1,
                     piezas_requeridas=asig_item["piezas_requeridas"],
+                    piezas_habilitadas=0,
                     notas=asig_item.get("notas")
                 )
                 db.add(db_asig)

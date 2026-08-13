@@ -95,6 +95,11 @@ def actualizar_asignacion(
     for key, value in update_data.items():
         setattr(db_asignacion, key, value)
         
+    # Inicialización de Pipeline: Si se inicia la tarea 1, habilitar todo su inventario
+    if update_data.get("estado") == "en_proceso" and getattr(db_asignacion, "secuencia", 1) == 1:
+        if db_asignacion.piezas_habilitadas == 0:
+            db_asignacion.piezas_habilitadas = db_asignacion.piezas_requeridas
+            
     db.add(db_asignacion)
     db.commit()
     

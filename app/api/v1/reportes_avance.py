@@ -189,6 +189,17 @@ def validar_reporte_avance(
                 
             db.add(db_asignacion)
             
+            # Empujar piezas a la siguiente etapa (Pipeline Secuencial)
+            if payload.piezas_buenas > 0:
+                siguiente_asig = db.exec(
+                    select(AsignacionOrden)
+                    .where(AsignacionOrden.orden_id == db_asignacion.orden_id)
+                    .where(AsignacionOrden.secuencia == db_asignacion.secuencia + 1)
+                ).first()
+                if siguiente_asig:
+                    siguiente_asig.piezas_habilitadas += payload.piezas_buenas
+                    db.add(siguiente_asig)
+            
             # Automatización: Si la orden aún está pendiente, arrancarla automáticamente
             if db_asignacion.orden and db_asignacion.orden.estado == "pendiente":
                 db_asignacion.orden.estado = "en_proceso"
