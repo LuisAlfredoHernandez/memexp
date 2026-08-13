@@ -115,7 +115,7 @@ def crear_orden(
             tarea=asig_item["tarea"],
             secuencia=idx + 1,
             piezas_requeridas=asig_item["piezas_requeridas"],
-            piezas_habilitadas=0,
+            piezas_habilitadas=asig_item["piezas_requeridas"] if idx == 0 else 0,
             notas=asig_item.get("notas")
         )
         db.add(db_asig)
@@ -272,7 +272,7 @@ def actualizar_orden(
                     tarea=asig_item["tarea"],
                     secuencia=idx + 1,
                     piezas_requeridas=asig_item["piezas_requeridas"],
-                    piezas_habilitadas=0,
+                    piezas_habilitadas=asig_item["piezas_requeridas"] if idx == 0 else 0,
                     notas=asig_item.get("notas")
                 )
                 db.add(db_asig)
