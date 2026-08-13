@@ -395,11 +395,10 @@ async def subir_datos_entrenamiento(
                     """), {"uid": op_id, "nombre": nombre_op, "apellido": apellido_op, "correo": correo_fake, "pwd": pwd_hash})
                     
                     db.execute(text("""
-                        INSERT INTO operario (id, "maquinaActual", habilidades)
-                        VALUES (:opid, :maq, :habs)
+                        INSERT INTO operario (id, habilidades)
+                        VALUES (:opid, :habs)
                     """), {
                         "opid": op_id, 
-                        "maq": maq_tipo, 
                         "habs": json.dumps([{"maquina": maq_tipo, "nivel_eficiencia": eficiencia_calc}])
                     })
                 else:
@@ -508,8 +507,8 @@ def sembrar_datos_historicos(current_user: Usuario = Depends(get_current_active_
                 
                 op_id = user_id
                 db.execute(text("""
-                    INSERT INTO operario (id, "maquinaActual", habilidades)
-                    VALUES (:opid, 'MERROW', '[{"maquina": "MERROW", "nivel_eficiencia": 88}]')
+                    INSERT INTO operario (id, habilidades)
+                    VALUES (:opid, '[{"maquina": "MERROW", "nivel_eficiencia": 88}]')
                 """), {"opid": op_id})
             
             # 2. Asegurar máquina operativa
@@ -625,7 +624,7 @@ def exportar_historial_excel(current_user: Usuario = Depends(get_current_active_
                 o.tipo AS "Tipo",
                 o.prioridad AS "Prioridad",
                 (u.nombre || ' ' || u.apellido) AS "Operario",
-                COALESCE(op."maquinaActual", 'SIN-MAQUINA') AS "Máquina",
+                COALESCE(maq.codigo, 'SIN-MAQUINA') AS "Máquina",
                 COALESCE(lo.producto_tipo, 'desconocido') AS "Prenda",
                 ao.piezas_requeridas AS "Piezas Requeridas",
                 COALESCE(ra.piezas_buenas, 0) AS "Piezas Buenas",
@@ -637,6 +636,7 @@ def exportar_historial_excel(current_user: Usuario = Depends(get_current_active_
             LEFT JOIN linea_orden lo ON lo.orden_id = o.id
             JOIN usuario u ON ao.operario_id = u.id
             LEFT JOIN operario op ON u.id = op.id
+            LEFT JOIN maquina maq ON op.maquina_actual_id = maq.id
             LEFT JOIN reporte_avance ra ON ra.asignacion_id = ao.id AND ra.estado = 'validado'
             ORDER BY o.fecha_creacion DESC
         """)

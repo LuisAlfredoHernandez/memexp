@@ -79,7 +79,7 @@ def crear_reporte_avance(
     db_operario = db.get(Operario, db_asignacion.operario_id)
     if db_operario:
         if not maquina:
-            maquina = db_operario.maquinaActual
+            maquina = db_operario.maquina_actual_id
             
         if not fecha_inicio:
             fecha_inicio = db_operario.sesion_activa_desde
@@ -197,7 +197,7 @@ def validar_reporte_avance(
         # Recalcular eficiencia dinámica del operario para la máquina utilizada
         maquina_val = db_reporte.maquina_id
         if not maquina_val and db_reporte.operario:
-            maquina_val = db_reporte.operario.maquinaActual
+            maquina_val = db_reporte.operario.maquina_actual_id
 
         if maquina_val:
             import uuid
