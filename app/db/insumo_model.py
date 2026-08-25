@@ -5,6 +5,7 @@ from app.schemas.insumo import TipoInsumo, UnidadMedida
 
 if TYPE_CHECKING:
     from .linea_orden_insumo_link import LineaOrdenInsumoLink
+    from .movimiento_inventario_model import MovimientoInventario
 
 
 class Insumo(SQLModel, table=True):
@@ -17,3 +18,4 @@ class Insumo(SQLModel, table=True):
     minimo: float = Field(default=0)
     proveedor: str | None = None
     vinculado_a: List["LineaOrdenInsumoLink"] = Relationship(back_populates="insumo")
+    movimientos: List["MovimientoInventario"] = Relationship(back_populates="insumo")

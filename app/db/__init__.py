@@ -14,3 +14,4 @@ from .linea_orden_venta_model import LineaOrdenVenta
 from .orden_compra_model import OrdenCompra
 from .linea_orden_compra_model import LineaOrdenCompra
 from .factura_model import Factura
+from .movimiento_inventario_model import MovimientoInventario

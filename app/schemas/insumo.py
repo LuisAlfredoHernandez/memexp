@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from enum import Enum
 import uuid
+from app.schemas.movimiento_inventario import MovimientoInventario
 
 class TipoInsumo(str, Enum):
     TELA = "tela"
@@ -56,9 +57,14 @@ class InsumoCreate(InsumoBase):
 class Insumo(InsumoBase):
     id: uuid.UUID
     vinculado_a: list[InsumoEnOrden] = Field(default_factory=list)
+    movimientos: list[MovimientoInventario] = Field(default_factory=list)
 
     class ConfigDict:
         from_attributes = True
+
+class AjusteInsumo(BaseModel):
+    cantidad_ajuste: float
+    justificacion: str = Field(..., min_length=3)
 
 
 class InsumoUpdate(BaseModel):

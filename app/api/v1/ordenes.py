@@ -5,6 +5,7 @@ from app.db.orden_model import Orden as OrdenDB
 from app.db.linea_orden_model import LineaOrden as LineaOrdenDB
 from app.db.linea_orden_insumo_link import LineaOrdenInsumoLink
 from app.db.insumo_model import Insumo as InsumoDB
+from app.db.movimiento_inventario_model import MovimientoInventario, TipoMovimiento
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
 from app.db.usuario_model import Usuario
@@ -109,6 +110,16 @@ def crear_orden(
             db_insumo.stock -= insumo_item["cantidad_requerida"]
             db.add(db_insumo)
 
+            # Registrar la salida en Kardex
+            mov = MovimientoInventario(
+                insumo_id=insumo_item["insumo_id"],
+                tipo_movimiento=TipoMovimiento.SALIDA,
+                cantidad=-insumo_item["cantidad_requerida"],
+                referencia=numero_orden,
+                justificacion="Consumo para Orden de Producción"
+            )
+            db.add(mov)
+
             nuevo_link = LineaOrdenInsumoLink(
                 linea_orden=db_linea,
                 insumo_id=insumo_item["insumo_id"],
@@ -176,6 +187,14 @@ def actualizar_orden(
                 if db_insumo:
                     db_insumo.stock += link.cantidad_requerida
                     db.add(db_insumo)
+                    mov = MovimientoInventario(
+                        insumo_id=link.insumo_id,
+                        tipo_movimiento=TipoMovimiento.AJUSTE,
+                        cantidad=link.cantidad_requerida,
+                        referencia=db_orden.numero,
+                        justificacion="Reversión por actualización OP"
+                    )
+                    db.add(mov)
 
         # Estrategia de reemplazo: Deep Diff
         lineas_data = update_data.pop("lineas")
@@ -233,6 +252,15 @@ def actualizar_orden(
                 
                 db_insumo.stock -= insumo_item["cantidad_requerida"]
                 db.add(db_insumo)
+                
+                mov = MovimientoInventario(
+                    insumo_id=insumo_id_str,
+                    tipo_movimiento=TipoMovimiento.SALIDA,
+                    cantidad=-insumo_item["cantidad_requerida"],
+                    referencia=db_orden.numero,
+                    justificacion="Consumo reajustado para OP"
+                )
+                db.add(mov)
 
                 if insumo_id_str in existing_links:
                     link = existing_links[insumo_id_str]
@@ -368,6 +396,14 @@ def eliminar_orden(
             if db_insumo:
                 db_insumo.stock += link.cantidad_requerida
                 db.add(db_insumo)
+                mov = MovimientoInventario(
+                    insumo_id=link.insumo_id,
+                    tipo_movimiento=TipoMovimiento.AJUSTE,
+                    cantidad=link.cantidad_requerida,
+                    referencia=db_orden.numero,
+                    justificacion="Reversión por eliminación de OP"
+                )
+                db.add(mov)
 
     db.delete(db_orden)
     db.commit()

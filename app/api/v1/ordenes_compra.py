@@ -10,6 +10,7 @@ from app.schemas.orden_compra import (
 from app.db.orden_compra_model import OrdenCompra as OrdenCompraDB
 from app.db.linea_orden_compra_model import LineaOrdenCompra as LineaOrdenCompraDB
 from app.db.insumo_model import Insumo as InsumoDB
+from app.db.movimiento_inventario_model import MovimientoInventario, TipoMovimiento
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
 import uuid
@@ -150,6 +151,15 @@ def recibir_orden_compra(id: uuid.UUID, db: Session = Depends(get_session)):
             )
         db_insumo.stock += linea.cantidad
         db.add(db_insumo)
+
+        movimiento = MovimientoInventario(
+            insumo_id=linea.insumo_id,
+            tipo_movimiento=TipoMovimiento.ENTRADA,
+            cantidad=linea.cantidad,
+            referencia=db_oc.numero,
+            justificacion="Recepción de Orden de Compra"
+        )
+        db.add(movimiento)
 
     db_oc.estado = EstadoOrdenCompra.RECIBIDA
     db.add(db_oc)
