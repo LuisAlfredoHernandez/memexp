@@ -13,6 +13,7 @@ from app.db.prenda_model import Prenda
 from app.services.ml_engine.pipeline import train_model
 from app.services.ml_engine.predictor import predictor
 from app.db.asignacion_model import AsignacionOrden
+from app.db.orden_venta_model import OrdenVenta as OrdenVentaDB, EstadoOrdenVenta
 import uuid
 import re
 
@@ -53,9 +54,22 @@ def crear_orden(
     
     # Crea el objeto Orden principal
     db_orden = OrdenDB(numero=numero_orden, **orden_data)
-    
 
-    
+    # Si se vinculó a una Orden de Venta, validar y actualizar su estado
+    if db_orden.orden_venta_id:
+        db_ov = db.get(OrdenVentaDB, db_orden.orden_venta_id)
+        if not db_ov:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Orden de venta con ID {db_orden.orden_venta_id} no encontrada"
+            )
+        if db_ov.estado != EstadoOrdenVenta.EN_ESPERA:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La orden de venta debe estar en estado 'EN_ESPERA' para generar una orden de producción. Estado actual: '{db_ov.estado.value}'."
+            )
+        db_ov.estado = EstadoOrdenVenta.EN_PRODUCCION
+        db.add(db_ov)
     # Crea los objetos anidados en memoria. SQLModel los asociará.
     for linea_item in lineas_data:
         insumos_data = linea_item.pop("insumos")
@@ -298,6 +312,14 @@ def actualizar_orden(
             if str(asig.estado).lower() != "completada":
                 asig.estado = "completada"
                 db.add(asig)
+
+        # Si la OP está vinculada a una OV, actualizar la OV a COMPLETADA
+        if db_orden.orden_venta_id:
+            db_ov = db.get(OrdenVentaDB, db_orden.orden_venta_id)
+            if db_ov and db_ov.estado == EstadoOrdenVenta.EN_PRODUCCION:
+                db_ov.estado = EstadoOrdenVenta.COMPLETADA
+                db.add(db_ov)
+
         db.commit()
 
         # Disparar Sincronización de IA (Opción 1)

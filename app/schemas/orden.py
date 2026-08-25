@@ -71,6 +71,7 @@ class OrdenBase(BaseModel):
     temporada: Temporada | None = None 
     fecha_entrega_estimada: datetime
     notas: str | None = None
+    orden_venta_id: uuid.UUID | None = None
     lineas: list[LineaOrden] = Field(..., min_length=1)
     asignaciones: list[AsignacionBase] = Field(default=[])
 
@@ -117,6 +118,7 @@ class Orden(OrdenBase):
     numero: str
     estado: EstadoOrden
     fecha_creacion: datetime = Field(default_factory=datetime.now)
+    orden_venta_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
 
@@ -131,5 +133,6 @@ class OrdenUpdate(BaseModel):
     temporada: Temporada | None = None
     fecha_entrega_estimada: datetime | None = None
     notas: str | None = None
+    orden_venta_id: uuid.UUID | None = None
     lineas: list[LineaOrden] | None = Field(default=None, min_length=1)
     asignaciones: list[AsignacionBase] | None = Field(default=None)
