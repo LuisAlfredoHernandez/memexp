@@ -102,9 +102,8 @@ def actualizar_orden_venta(
 
     if "lineas" in update_data:
         lineas_data = update_data.pop("lineas")
-        # Reemplazar líneas completas (estrategia simple)
-        for linea in list(db_ov.lineas):
-            db.delete(linea)
+        # Reemplazar líneas completas aprovechando cascade="all, delete-orphan"
+        db_ov.lineas = []
         db.flush()
 
         for linea_item in lineas_data:
