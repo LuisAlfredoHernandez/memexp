@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlmodel import Session, select
 from datetime import datetime, timezone
+from sqlalchemy.orm import selectinload
 from app.schemas.factura import (
     Factura as FacturaSchema,
     FacturaDetalle,
@@ -19,16 +20,16 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=list[FacturaSchema])
+@router.get("/", response_model=list[FacturaDetalle])
 def listar_facturas(
     estado: EstadoFactura | None = None,
     db: Session = Depends(get_session),
 ):
-    query = select(FacturaDB)
+    query = select(FacturaDB).options(selectinload(FacturaDB.orden_venta))
     if estado:
         query = query.where(FacturaDB.estado == estado)
     facturas = db.exec(query).all()
-    return [FacturaSchema.model_validate(f) for f in facturas]
+    return [FacturaDetalle.model_validate(f) for f in facturas]
 
 
 @router.get("/{id}", response_model=FacturaDetalle)

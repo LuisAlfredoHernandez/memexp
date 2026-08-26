@@ -63,7 +63,7 @@ class Insumo(InsumoBase):
         from_attributes = True
 
 class AjusteInsumo(BaseModel):
-    cantidad_ajuste: float
+    cantidad_ajuste: float = Field(..., lt=0, description="Solo se permiten ajustes negativos (mermas/daños)")
     justificacion: str = Field(..., min_length=3)
 
 
