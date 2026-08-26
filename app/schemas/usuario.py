@@ -20,7 +20,6 @@ class UsuarioBase(BaseModel):
     estado: UsuarioEstado
 
 class UsuarioCreate(UsuarioBase):
-    password: str = Field(..., min_length=8)
     estado: UsuarioEstado = UsuarioEstado.INACTIVO
     
 class Usuario(UsuarioBase):

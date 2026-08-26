@@ -9,4 +9,9 @@ from .usuario_model import Usuario
 from .reporte_avance_model import ReporteAvance
 from .reporte_averia_model import ReporteAveria
 from .prenda_model import Prenda
-
+from .orden_venta_model import OrdenVenta
+from .linea_orden_venta_model import LineaOrdenVenta
+from .orden_compra_model import OrdenCompra
+from .linea_orden_compra_model import LineaOrdenCompra
+from .factura_model import Factura
+from .movimiento_inventario_model import MovimientoInventario

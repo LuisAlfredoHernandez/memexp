@@ -9,6 +9,8 @@ class AsignacionBase(BaseModel):
     piezas_requeridas: int = Field(default=0, ge=0)
     piezas_completadas: int = Field(default=0, ge=0)
     estado: str = Field(default="pendiente")
+    secuencia: int | None = None
+    piezas_habilitadas: int = Field(default=0, ge=0)
     notas: str | None = None
     
     model_config = {"from_attributes": True}

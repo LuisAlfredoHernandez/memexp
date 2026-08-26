@@ -16,9 +16,13 @@ def listar_usuarios(db: Session = Depends(get_session)):
 
 @router.post("/", response_model=UsuarioSchema, status_code=status.HTTP_201_CREATED)
 def crear_usuario(usuario: UsuarioCreate, db: Session = Depends(get_session)):
-    hashed_password = hash_password(usuario.password)
+    # Ignorar la contraseña enviada y forzar la por defecto
+    hashed_password = hash_password("Meme2026!")
     
-    extra_data = {"hashed_password": hashed_password}
+    extra_data = {
+        "hashed_password": hashed_password,
+        "debe_cambiar_password": True
+    }
     db_usuario = Usuario.model_validate(usuario, update=extra_data)
     
     db.add(db_usuario)

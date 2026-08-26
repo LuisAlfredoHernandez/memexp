@@ -4,6 +4,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     refresh_token: str | None = None
+    requires_password_change: bool = False
 
 class TokenRefreshRequest(BaseModel):
     refresh_token: str
@@ -13,4 +14,8 @@ class TokenData(BaseModel):
 
 class PasswordReset(BaseModel):
     token: str
+    new_password: str = Field(..., min_length=8)
+
+class PasswordChange(BaseModel):
+    current_password: str
     new_password: str = Field(..., min_length=8)

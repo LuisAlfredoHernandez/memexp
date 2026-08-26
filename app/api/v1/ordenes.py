@@ -5,6 +5,7 @@ from app.db.orden_model import Orden as OrdenDB
 from app.db.linea_orden_model import LineaOrden as LineaOrdenDB
 from app.db.linea_orden_insumo_link import LineaOrdenInsumoLink
 from app.db.insumo_model import Insumo as InsumoDB
+from app.db.movimiento_inventario_model import MovimientoInventario, TipoMovimiento
 from app.db.session import get_session
 from app.api.deps import get_current_active_user
 from app.db.usuario_model import Usuario
@@ -13,6 +14,7 @@ from app.db.prenda_model import Prenda
 from app.services.ml_engine.pipeline import train_model
 from app.services.ml_engine.predictor import predictor
 from app.db.asignacion_model import AsignacionOrden
+from app.db.orden_venta_model import OrdenVenta as OrdenVentaDB, EstadoOrdenVenta
 import uuid
 import re
 
@@ -53,9 +55,22 @@ def crear_orden(
     
     # Crea el objeto Orden principal
     db_orden = OrdenDB(numero=numero_orden, **orden_data)
-    
 
-    
+    # Si se vinculó a una Orden de Venta, validar y actualizar su estado
+    if db_orden.orden_venta_id:
+        db_ov = db.get(OrdenVentaDB, db_orden.orden_venta_id)
+        if not db_ov:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Orden de venta con ID {db_orden.orden_venta_id} no encontrada"
+            )
+        if db_ov.estado != EstadoOrdenVenta.EN_ESPERA:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La orden de venta debe estar en estado 'EN_ESPERA' para generar una orden de producción. Estado actual: '{db_ov.estado.value}'."
+            )
+        db_ov.estado = EstadoOrdenVenta.EN_PRODUCCION
+        db.add(db_ov)
     # Crea los objetos anidados en memoria. SQLModel los asociará.
     for linea_item in lineas_data:
         insumos_data = linea_item.pop("insumos")
@@ -95,6 +110,16 @@ def crear_orden(
             db_insumo.stock -= insumo_item["cantidad_requerida"]
             db.add(db_insumo)
 
+            # Registrar la salida en Kardex
+            mov = MovimientoInventario(
+                insumo_id=insumo_item["insumo_id"],
+                tipo_movimiento=TipoMovimiento.SALIDA,
+                cantidad=-insumo_item["cantidad_requerida"],
+                referencia=numero_orden,
+                justificacion="Consumo para Orden de Producción"
+            )
+            db.add(mov)
+
             nuevo_link = LineaOrdenInsumoLink(
                 linea_orden=db_linea,
                 insumo_id=insumo_item["insumo_id"],
@@ -108,12 +133,14 @@ def crear_orden(
     db.flush() # Para obtener db_orden.id antes del commit
     
     # Crear asignaciones
-    for asig_item in asignaciones_data:
+    for idx, asig_item in enumerate(asignaciones_data):
         db_asig = AsignacionOrden(
             orden_id=db_orden.id,
             operario_id=asig_item["operario_id"],
             tarea=asig_item["tarea"],
+            secuencia=idx + 1,
             piezas_requeridas=asig_item["piezas_requeridas"],
+            piezas_habilitadas=asig_item["piezas_requeridas"] if idx == 0 else 0,
             notas=asig_item.get("notas")
         )
         db.add(db_asig)
@@ -160,6 +187,14 @@ def actualizar_orden(
                 if db_insumo:
                     db_insumo.stock += link.cantidad_requerida
                     db.add(db_insumo)
+                    mov = MovimientoInventario(
+                        insumo_id=link.insumo_id,
+                        tipo_movimiento=TipoMovimiento.AJUSTE,
+                        cantidad=link.cantidad_requerida,
+                        referencia=db_orden.numero,
+                        justificacion="Reversión por actualización OP"
+                    )
+                    db.add(mov)
 
         # Estrategia de reemplazo: Deep Diff
         lineas_data = update_data.pop("lineas")
@@ -217,6 +252,15 @@ def actualizar_orden(
                 
                 db_insumo.stock -= insumo_item["cantidad_requerida"]
                 db.add(db_insumo)
+                
+                mov = MovimientoInventario(
+                    insumo_id=insumo_id_str,
+                    tipo_movimiento=TipoMovimiento.SALIDA,
+                    cantidad=-insumo_item["cantidad_requerida"],
+                    referencia=db_orden.numero,
+                    justificacion="Consumo reajustado para OP"
+                )
+                db.add(mov)
 
                 if insumo_id_str in existing_links:
                     link = existing_links[insumo_id_str]
@@ -249,7 +293,7 @@ def actualizar_orden(
         
         incoming_ids = set()
         
-        for asig_item in asignaciones_data:
+        for idx, asig_item in enumerate(asignaciones_data):
             asig_id = str(asig_item.get("id")) if asig_item.get("id") else None
             
             if asig_id and asig_id in existing_map:
@@ -257,6 +301,7 @@ def actualizar_orden(
                 db_asig = existing_map[asig_id]
                 db_asig.operario_id = asig_item["operario_id"]
                 db_asig.tarea = asig_item["tarea"]
+                db_asig.secuencia = idx + 1
                 db_asig.piezas_requeridas = asig_item["piezas_requeridas"]
                 db_asig.notas = asig_item.get("notas")
                 db.add(db_asig)
@@ -267,7 +312,9 @@ def actualizar_orden(
                     orden_id=db_orden.id,
                     operario_id=asig_item["operario_id"],
                     tarea=asig_item["tarea"],
+                    secuencia=idx + 1,
                     piezas_requeridas=asig_item["piezas_requeridas"],
+                    piezas_habilitadas=asig_item["piezas_requeridas"] if idx == 0 else 0,
                     notas=asig_item.get("notas")
                 )
                 db.add(db_asig)
@@ -293,6 +340,14 @@ def actualizar_orden(
             if str(asig.estado).lower() != "completada":
                 asig.estado = "completada"
                 db.add(asig)
+
+        # Si la OP está vinculada a una OV, actualizar la OV a COMPLETADA
+        if db_orden.orden_venta_id:
+            db_ov = db.get(OrdenVentaDB, db_orden.orden_venta_id)
+            if db_ov and db_ov.estado == EstadoOrdenVenta.EN_PRODUCCION:
+                db_ov.estado = EstadoOrdenVenta.COMPLETADA
+                db.add(db_ov)
+
         db.commit()
 
         # Disparar Sincronización de IA (Opción 1)
@@ -341,6 +396,14 @@ def eliminar_orden(
             if db_insumo:
                 db_insumo.stock += link.cantidad_requerida
                 db.add(db_insumo)
+                mov = MovimientoInventario(
+                    insumo_id=link.insumo_id,
+                    tipo_movimiento=TipoMovimiento.AJUSTE,
+                    cantidad=link.cantidad_requerida,
+                    referencia=db_orden.numero,
+                    justificacion="Reversión por eliminación de OP"
+                )
+                db.add(mov)
 
     db.delete(db_orden)
     db.commit()

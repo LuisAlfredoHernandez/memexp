@@ -15,4 +15,5 @@ class Usuario(SQLModel, table=True):
     rol: Rol
     estado: UsuarioEstado
     hashed_password: str
+    debe_cambiar_password: bool = Field(default=False)
     operario: Optional["Operario"] = Relationship(back_populates="usuario")

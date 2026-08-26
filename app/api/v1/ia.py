@@ -387,17 +387,18 @@ async def subir_datos_entrenamiento(
                 if not op_id:
                     op_id = uuid.uuid4()
                     correo_fake = f"{nombre_op.lower()}{random.randint(100, 999)}@memefabrica.com"
+                    from app.core.security import hash_password
+                    pwd_hash = hash_password("Meme2026!")
                     db.execute(text("""
-                        INSERT INTO usuario (id, nombre, apellido, correo, hashed_password, rol, estado)
-                        VALUES (:uid, :nombre, :apellido, :correo, '$2b$12$Z16Hw/pS8J2Tj0G8Qh...fake', 'Operario', 'ACTIVO')
-                    """), {"uid": op_id, "nombre": nombre_op, "apellido": apellido_op, "correo": correo_fake})
+                        INSERT INTO usuario (id, nombre, apellido, correo, hashed_password, rol, estado, debe_cambiar_password)
+                        VALUES (:uid, :nombre, :apellido, :correo, :pwd, 'Operario', 'ACTIVO', TRUE)
+                    """), {"uid": op_id, "nombre": nombre_op, "apellido": apellido_op, "correo": correo_fake, "pwd": pwd_hash})
                     
                     db.execute(text("""
-                        INSERT INTO operario (id, "maquinaActual", habilidades)
-                        VALUES (:opid, :maq, :habs)
+                        INSERT INTO operario (id, habilidades)
+                        VALUES (:opid, :habs)
                     """), {
                         "opid": op_id, 
-                        "maq": maq_tipo, 
                         "habs": json.dumps([{"maquina": maq_tipo, "nivel_eficiencia": eficiencia_calc}])
                     })
                 else:
@@ -454,8 +455,8 @@ async def subir_datos_entrenamiento(
                 rep_id = uuid.uuid4()
                 fecha_fin = fecha_val + timedelta(hours=horas)
                 db.execute(text("""
-                    INSERT INTO reporte_avance (id, asignacion_id, operario_id, piezas_reportadas, piezas_buenas, piezas_defectuosas, estado, fecha_reporte, fecha_validacion, notas)
-                    VALUES (:rid, :aid, :opid, :cant, :buenas, :def, 'validado', :fecha_fin, :fecha_fin, 'Cargado desde Excel')
+                    INSERT INTO reporte_avance (id, asignacion_id, operario_id, piezas_reportadas, piezas_buenas, piezas_defectuosas, estado, fecha_reporte, fecha_validacion, notas, maquina_id)
+                    VALUES (:rid, :aid, :opid, :cant, :buenas, :def, 'validado', :fecha_fin, :fecha_fin, 'Cargado desde Excel', :maq_id)
                 """), {
                     "rid": rep_id,
                     "aid": asig_id,
@@ -463,7 +464,8 @@ async def subir_datos_entrenamiento(
                     "cant": piezas_req,
                     "buenas": piezas_buenas,
                     "def": piezas_def,
-                    "fecha_fin": fecha_fin
+                    "fecha_fin": fecha_fin,
+                    "maq_id": str(maq_id)
                 })
             
             db.commit()
@@ -505,8 +507,8 @@ def sembrar_datos_historicos(current_user: Usuario = Depends(get_current_active_
                 
                 op_id = user_id
                 db.execute(text("""
-                    INSERT INTO operario (id, "maquinaActual", habilidades)
-                    VALUES (:opid, 'MERROW', '[{"maquina": "MERROW", "nivel_eficiencia": 88}]')
+                    INSERT INTO operario (id, habilidades)
+                    VALUES (:opid, '[{"maquina": "MERROW", "nivel_eficiencia": 88}]')
                 """), {"opid": op_id})
             
             # 2. Asegurar máquina operativa
@@ -622,7 +624,7 @@ def exportar_historial_excel(current_user: Usuario = Depends(get_current_active_
                 o.tipo AS "Tipo",
                 o.prioridad AS "Prioridad",
                 (u.nombre || ' ' || u.apellido) AS "Operario",
-                COALESCE(op."maquinaActual", 'SIN-MAQUINA') AS "Máquina",
+                COALESCE(maq.codigo, 'SIN-MAQUINA') AS "Máquina",
                 COALESCE(lo.producto_tipo, 'desconocido') AS "Prenda",
                 ao.piezas_requeridas AS "Piezas Requeridas",
                 COALESCE(ra.piezas_buenas, 0) AS "Piezas Buenas",
@@ -634,6 +636,7 @@ def exportar_historial_excel(current_user: Usuario = Depends(get_current_active_
             LEFT JOIN linea_orden lo ON lo.orden_id = o.id
             JOIN usuario u ON ao.operario_id = u.id
             LEFT JOIN operario op ON u.id = op.id
+            LEFT JOIN maquina maq ON op.maquina_actual_id = maq.id
             LEFT JOIN reporte_avance ra ON ra.asignacion_id = ao.id AND ra.estado = 'validado'
             ORDER BY o.fecha_creacion DESC
         """)

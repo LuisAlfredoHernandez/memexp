@@ -16,7 +16,9 @@ class AsignacionOrden(SQLModel, table=True):
     operario_id: uuid.UUID = Field(foreign_key="operario.id", index=True)
     
     tarea: str = Field(description="Descripción de la tarea asignada (ej: corte, confección, sobrehilado)")
+    secuencia: int = Field(default=1, description="El orden secuencial de esta tarea en la línea de producción de la orden")
     piezas_requeridas: int = Field(default=0, description="Cantidad de piezas requeridas para esta tarea")
+    piezas_habilitadas: int = Field(default=0, description="Cantidad de piezas que han llegado de la etapa anterior y están listas para trabajarse")
     piezas_completadas: int = Field(default=0, description="Cantidad de piezas completadas")
     estado: str = Field(default="pendiente", description="Estado de la asignación (pendiente, en_proceso, completada)")
     

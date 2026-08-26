@@ -79,7 +79,7 @@ def crear_reporte_avance(
     db_operario = db.get(Operario, db_asignacion.operario_id)
     if db_operario:
         if not maquina:
-            maquina = db_operario.maquinaActual
+            maquina = db_operario.maquina_actual_id
             
         if not fecha_inicio:
             fecha_inicio = db_operario.sesion_activa_desde
@@ -188,14 +188,87 @@ def validar_reporte_avance(
                 db_asignacion.estado = "en_proceso"
                 
             db.add(db_asignacion)
+            
+            # Empujar piezas a la siguiente etapa (Pipeline Secuencial)
+            if payload.piezas_buenas > 0:
+                siguiente_asig = db.exec(
+                    select(AsignacionOrden)
+                    .where(AsignacionOrden.orden_id == db_asignacion.orden_id)
+                    .where(AsignacionOrden.secuencia == db_asignacion.secuencia + 1)
+                ).first()
+                if siguiente_asig:
+                    siguiente_asig.piezas_habilitadas += payload.piezas_buenas
+                    db.add(siguiente_asig)
+                else:
+                    # ES LA ÚLTIMA TAREA DE LA SECUENCIA: SON PIEZAS TERMINADAS
+                    # Iteramos las líneas de la orden para ir llenando su "cantidad_completada" en cascada
+                    from app.db.linea_orden_model import LineaOrden
+                    lineas = db.exec(
+                        select(LineaOrden)
+                        .where(LineaOrden.orden_id == db_asignacion.orden_id)
+                    ).all()
+                    if lineas:
+                        piezas_restantes = payload.piezas_buenas
+                        for linea in lineas:
+                            faltantes = linea.cantidad - (linea.cantidad_completada or 0)
+                            if faltantes > 0 and piezas_restantes > 0:
+                                a_sumar = min(faltantes, piezas_restantes)
+                                linea.cantidad_completada = (linea.cantidad_completada or 0) + a_sumar
+                                piezas_restantes -= a_sumar
+                                db.add(linea)
+            
+            # Automatización de estados de la Orden General
+            if db_asignacion.orden:
+                orden = db_asignacion.orden
+                
+                # 1. Arrancarla automáticamente si estaba pendiente
+                if orden.estado == "pendiente":
+                    orden.estado = "en_proceso"
+                
+                # 2. Consultar todas las asignaciones de esta misma orden
+                todas_asignaciones = db.exec(
+                    select(AsignacionOrden)
+                    .where(AsignacionOrden.orden_id == orden.id)
+                ).all()
+                
+                # Verificar si en todas las asignaciones las piezas_completadas ya alcanzaron o superaron las piezas_requeridas
+                todas_completadas = all(
+                    asig.piezas_completadas >= asig.piezas_requeridas 
+                    for asig in todas_asignaciones
+                )
+                
+                # Si todas terminaron, cambiamos la orden global a completada
+                if todas_completadas:
+                    orden.estado = "completada"
+                
+                db.add(orden)
 
         # Recalcular eficiencia dinámica del operario para la máquina utilizada
         maquina_val = db_reporte.maquina_id
         if not maquina_val and db_reporte.operario:
-            maquina_val = db_reporte.operario.maquinaActual
+            maquina_val = db_reporte.operario.maquina_actual_id
 
         if maquina_val:
-            maq_obj = db.exec(select(Maquina).where((Maquina.codigo == maquina_val) | (Maquina.tipo == maquina_val))).first()
+            import uuid
+            maq_obj = None
+            try:
+                maq_uuid = uuid.UUID(str(maquina_val))
+                maq_obj = db.exec(select(Maquina).where(Maquina.id == maq_uuid)).first()
+            except ValueError:
+                pass
+            
+            if not maq_obj:
+                try:
+                    # Intenta buscar por tipo o codigo, asumiendo que no es un UUID válido.
+                    # Primero validamos si el string es un tipo válido para no explotar la DB
+                    from app.schemas.maquina import MaquinaTipo
+                    if str(maquina_val) in [e.value for e in MaquinaTipo]:
+                        maq_obj = db.exec(select(Maquina).where(Maquina.tipo == str(maquina_val))).first()
+                    if not maq_obj:
+                        maq_obj = db.exec(select(Maquina).where(Maquina.codigo == str(maquina_val))).first()
+                except Exception:
+                    pass
+
             capacidad_hora = float(maq_obj.capacidad_por_hora) if maq_obj and maq_obj.capacidad_por_hora > 0 else 10.0
             maq_tipo = str(maq_obj.tipo if maq_obj else maquina_val.split("-")[0]).lower()
 
