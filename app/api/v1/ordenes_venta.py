@@ -203,6 +203,11 @@ def generar_factura(id: uuid.UUID, db: Session = Depends(get_session)):
         total=total,
     )
     db.add(db_factura)
+    
+    # Actualizar estado de la orden de venta
+    db_ov.estado = EstadoOrdenVenta.FACTURADA
+    db.add(db_ov)
+
     db.commit()
     db.refresh(db_factura)
     return FacturaSchema.model_validate(db_factura)
